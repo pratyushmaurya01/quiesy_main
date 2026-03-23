@@ -37,7 +37,6 @@ class TeacherLoginSerializer(serializers.Serializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Quiz
         fields = [
@@ -47,14 +46,17 @@ class QuizSerializer(serializers.ModelSerializer):
             "description",
             "time_limit",
             "password",
-            "quiz_code"
+            "quiz_code",
+            "num_of_qus",
+            "review_on",
         ]
         read_only_fields = ["quiz_code"]
+
 
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
-        fields = ["id", "text"]
+        fields = ["id", "text","is_correct"]
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -76,25 +78,37 @@ class QuestionSerializer(serializers.ModelSerializer):
 
         return question
 
-class QuizStartSerializer(serializers.Serializer):
+from rest_framework import serializers
 
+class QuizStartSerializer(serializers.Serializer):
     quiz_code = serializers.UUIDField()
     student_name = serializers.CharField()
     email = serializers.EmailField()
     roll_number = serializers.CharField()
+    
+    # 🔥 Naya field add kiya (required=False taaki bina password wale quiz chal sakein)
+    password = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
-
         from .models import Quiz
 
         try:
             quiz = Quiz.objects.get(quiz_code=data["quiz_code"])
         except Quiz.DoesNotExist:
-            raise serializers.ValidationError("Invalid quiz code")
+            raise serializers.ValidationError({"error": "Invalid quiz code"})
+
+        # 🔥 THE FIX: Password Checking Logic
+        if quiz.password: # Agar teacher ne database mein password set kiya hai
+            provided_password = data.get("password", "")
+            
+            if not provided_password:
+                raise serializers.ValidationError({"error": "This quiz requires a  password to start."})
+                
+            if quiz.password != provided_password:
+                raise serializers.ValidationError({"error": "Incorrect quiz password. Please try again."})
 
         data["quiz"] = quiz
-        return data
-    
+        return data    
 
 class QuestionFetchSerializer(serializers.ModelSerializer):
 
@@ -110,3 +124,16 @@ class SubmitAnswerSerializer(serializers.Serializer):
     attempt_id = serializers.IntegerField()
     question_id = serializers.IntegerField()
     option_id = serializers.IntegerField()
+
+
+class UpdateOptionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    text = serializers.CharField()
+    is_correct = serializers.BooleanField()
+
+
+class UpdateQuestionSerializer(serializers.Serializer):
+    question_id = serializers.IntegerField()
+    text = serializers.CharField()
+    marks = serializers.IntegerField()
+    options = UpdateOptionSerializer(many=True)

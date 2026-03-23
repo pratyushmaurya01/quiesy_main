@@ -50,11 +50,10 @@ class Quiz(models.Model):
     description = models.TextField(blank=True, null=True)
     review_on = models.BooleanField(default=True)
     quiz_code = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-
+    num_of_qus = models.IntegerField()
     time_limit = models.IntegerField(help_text="Time in minutes", null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
     password = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
