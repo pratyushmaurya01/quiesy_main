@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .serializers import TeacherLoginSerializer,QuestionSerializer ,TeacherRegisterSerializer 
 from django.contrib.auth import login
-from . models import QuizAttempt , Quiz , Question , Option , Answer
+from . models import QuizAttempt , Quiz , Question , Option , Answer , TestCase
 from .serializers import QuizSerializer , QuizStartSerializer , QuestionFetchSerializer , UpdateQuestionSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -12,7 +12,11 @@ from . serializers import SubmitAnswerSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
+import threading
+import subprocess
+import tempfile
 
+execution_lock = threading.Lock()
 
 @api_view(["POST"])
 def teacher_register(request):
@@ -68,6 +72,46 @@ def create_question(request):
         return Response(serializer.data)
 
     return Response(serializer.errors)
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def update_question(request):
+
+    serializer = UpdateQuestionSerializer(data=request.data)
+
+    if serializer.is_valid():
+
+        data = serializer.validated_data
+
+        try:
+            question = Question.objects.get(id=data["question_id"])
+        except Question.DoesNotExist:
+            return Response({"error": "Question not found"}, status=404)
+
+        # 🔹 common update
+        question.text = data["text"]
+        question.marks = data["marks"]
+        question.type = data["type"]
+        question.starter_code = data.get("starter_code", "")
+        question.save()
+
+        # 🔹 MCQ update
+        if question.type in ["mcq", "msq"]:
+            Option.objects.filter(question=question).delete()
+
+            for opt in data.get("options", []):
+                Option.objects.create(question=question, **opt)
+
+        # 🔹 Coding update
+        elif question.type == "coding":
+            TestCase.objects.filter(question=question).delete()
+
+            for test in data.get("test_cases", []):
+                TestCase.objects.create(question=question, **test)
+
+        return Response({"message": "Updated successfully"})
+
+    return Response(serializer.errors, status=400)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -144,7 +188,6 @@ def get_quiz_questions(request, quiz_code):
         "questions": serializer.data
     })
 
-
 @api_view(["POST"])
 def submit_answer(request):
 
@@ -156,7 +199,7 @@ def submit_answer(request):
 
         attempt = QuizAttempt.objects.get(id=data["attempt_id"])
 
-        # 🔥 prevent changes after submit
+        # ❌ prevent re-submit
         if attempt.completed_at:
             return Response({"error": "Quiz already submitted"}, status=400)
 
@@ -165,23 +208,42 @@ def submit_answer(request):
             quiz=attempt.quiz
         )
 
-        option = Option.objects.get(
-            id=data["option_id"],
-            question=question
-        )
+        # 🔥 CASE 1: CODING QUESTION
+        if question.type == "coding":
+            code = request.data.get("code", "")
 
-        is_correct = option.is_correct
+            Answer.objects.update_or_create(
+                attempt=attempt,
+                question=question,
+                defaults={
+                    "code": code,
+                    "selected_option": None,
+                    "is_correct": False  # abhi judge nahi kiya
+                }
+            )
 
-        Answer.objects.update_or_create(
-            attempt=attempt,
-            question=question,
-            defaults={
-                "selected_option": option,
-                "is_correct": is_correct
-            }
-        )
+            return Response({"status": "code saved"})
 
-        return Response({"status": "saved"})
+        # 🔥 CASE 2: MCQ / MSQ
+        else:
+            option = Option.objects.get(
+                id=data["option_id"],
+                question=question
+            )
+
+            is_correct = option.is_correct
+
+            Answer.objects.update_or_create(
+                attempt=attempt,
+                question=question,
+                defaults={
+                    "selected_option": option,
+                    "code": None,
+                    "is_correct": is_correct
+                }
+            )
+
+            return Response({"status": "answer saved"})
 
     return Response(serializer.errors, status=400)
 
@@ -201,10 +263,19 @@ def finish_quiz(request):
     score = 0
 
     for ans in answers:
+        # ye simple jab mcq hoga
         if ans.selected_option and ans.selected_option.is_correct:
             score += ans.question.marks
+        # aur ye coding qus ke liye 
+        elif ans.question.type == "coding" and ans.code:
+            coding_marks = evaluate_code(ans.question, ans.code, ans.language)
+            score += coding_marks
+        elif ans.question.type == "coding":
+            score += 0
 
+        
     attempt.score = score
+
     attempt.completed_at = timezone.now()
     attempt.save()
 
@@ -216,7 +287,6 @@ def finish_quiz(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def quiz_questions_list(request, quiz_id):
-
     try:
         quiz = Quiz.objects.get(id=quiz_id)
     except Quiz.DoesNotExist:
@@ -247,46 +317,6 @@ def quiz_questions_list(request, quiz_id):
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 
-@api_view(["PUT"])
-@permission_classes([IsAuthenticated])
-def update_question(request):
-
-    serializer = UpdateQuestionSerializer(data=request.data)
-
-    if serializer.is_valid():
-
-        data = serializer.validated_data
-
-        try:
-            question = Question.objects.get(id=data["question_id"])
-        except Question.DoesNotExist:
-            return Response({"error": "Question not found"}, status=404)
-
-        # 🔥 Update question
-        question.text = data["text"]
-        question.marks = data["marks"]
-        question.save()
-
-        # पहले सब false करो
-        Option.objects.filter(question=question).update(is_correct=False)
-
-        # अब जो frontend ने भेजा वही true करो
-        for opt_data in data["options"]:
-            try:
-                option = Option.objects.get(
-                    id=opt_data["id"],
-                    question=question
-                )
-            except Option.DoesNotExist:
-                continue
-
-            option.text = opt_data["text"]
-            option.is_correct = opt_data["is_correct"]
-            option.save()
-
-        return Response({"message": "Updated successfully"})
-
-    return Response(serializer.errors, status=400)
 
 
 @api_view(["GET"])
@@ -449,3 +479,144 @@ def get_quiz_info(request, quiz_code):
     except Quiz.DoesNotExist:
         return Response({"error": "Invalid quiz code"}, status=status.HTTP_404_NOT_FOUND)
     
+
+
+import subprocess
+import tempfile
+import os
+
+def run_python(code, input_data):
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(code)
+            file_path = f.name
+
+        result = subprocess.run(
+            ["python3", file_path],
+            input=input_data,
+            text=True,
+            capture_output=True,
+            timeout=3
+        )
+
+        if result.returncode != 0:
+            return "ERROR"
+
+        return result.stdout.strip()
+
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT"
+    except:
+        return "ERROR"
+
+def run_java(code, input_data):
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            file_path = os.path.join(temp_dir, "Main.java")
+
+            with open(file_path, "w") as f:
+                f.write(code)
+
+            # compile
+            compile_process = subprocess.run(
+                ["javac", file_path],
+                capture_output=True,
+                text=True,
+                timeout=4
+            )
+
+            if compile_process.returncode != 0:
+                return "ERROR"
+
+            # run
+            run_process = subprocess.run(
+                ["java", "-cp", temp_dir, "Main"],
+                input=input_data,
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+
+            if run_process.returncode != 0:
+                return "ERROR"
+
+            return run_process.stdout.strip()
+
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT"
+    except:
+        return "ERROR"
+
+
+def run_cpp(code, input_data):
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            cpp_path = os.path.join(temp_dir, "main.cpp")
+            exe_path = os.path.join(temp_dir, "main")
+
+            with open(cpp_path, "w") as f:
+                f.write(code)
+
+            # compile
+            compile_process = subprocess.run(
+                ["g++", cpp_path, "-o", exe_path],
+                capture_output=True,
+                text=True,
+                timeout=4
+            )
+
+            if compile_process.returncode != 0:
+                return "ERROR"
+
+            # run
+            run_process = subprocess.run(
+                [exe_path],
+                input=input_data,
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+
+            if run_process.returncode != 0:
+                return "ERROR"
+
+            return run_process.stdout.strip()
+
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT"
+    except:
+        return "ERROR"
+    
+
+def run_code(code, input_data, language):
+
+    if language == "python":
+        return run_python(code, input_data)
+
+    elif language == "java":
+        return run_java(code, input_data)
+
+    elif language == "cpp":
+        return run_cpp(code, input_data)
+
+    return "ERROR"
+
+
+def evaluate_code(question, code, language):
+
+    test_cases = question.test_cases.all()
+    total = test_cases.count()
+    passed = 0
+
+    for test in test_cases:
+        with execution_lock:
+            output = run_code(code, test.input_data, language)
+
+        if output == test.expected_output.strip():
+            passed += 1
+
+    return (passed / total) * question.marks
+
+

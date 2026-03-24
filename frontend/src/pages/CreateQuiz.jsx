@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate , Link} from "react-router-dom"
+import API from "../api/api"
 
 export default function CreateQuiz() {
   const navigate = useNavigate()
@@ -22,27 +23,20 @@ export default function CreateQuiz() {
     })
   }
 
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const token = localStorage.getItem("access")
+    try {
+      const res = await API.post("create-quiz/", form)
+      const data = res.data
 
-    const res = await fetch("http://127.0.0.1:8000/api/create-quiz/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(form)
-    })
+      console.log("CREATE QUIZ:", data)
 
-    const data = await res.json()
+      navigate(`/add-questions/${data.id}`)
 
-    console.log("CREATE QUIZ:", data)
-
-    if (res.ok) {
-      navigate(`/add-questions/${data.id}`) 
-    } else {
+    } catch (err) {
+      console.error(err)
       alert("Quiz creation failed")
     }
   }

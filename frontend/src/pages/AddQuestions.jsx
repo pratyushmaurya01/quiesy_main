@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
+import API from "../api/api"
 
 export default function AddQuestions() {
 
@@ -15,23 +16,19 @@ export default function AddQuestions() {
     correctIndex: 0
   })
 
+
   useEffect(() => {
     const fetchQuizDetails = async () => {
-      const token = localStorage.getItem("access")
+      try {
+        const res = await API.get(`quiz/${quizId}/`)
+        const data = res.data
 
-      const res = await fetch(
-        `http://127.0.0.1:8000/api/quiz/${quizId}/`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      )
+        setQuestionCount(data.current_count)
+        setTotalQuestions(data.num_of_qus)
 
-      const data = await res.json()
-
-      setQuestionCount(data.current_count)
-      setTotalQuestions(data.num_of_qus)
+      } catch (err) {
+        console.error("Failed to fetch quiz details:", err)
+      }
     }
 
     fetchQuizDetails()

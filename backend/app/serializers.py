@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User , Quiz , Question , Option , QuizAttempt , Answer
+from .models import User , Quiz , Question , Option , QuizAttempt , Answer , TestCase
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 
@@ -58,23 +58,46 @@ class OptionSerializer(serializers.ModelSerializer):
         model = Option
         fields = ["id", "text","is_correct"]
 
+class TestCaseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TestCase
+        fields = ["input_data", "expected_output"]
+
 
 class QuestionSerializer(serializers.ModelSerializer):
 
-    options = OptionSerializer(many=True)
+    options = OptionSerializer(many=True, required=False)
+    test_cases = TestCaseSerializer(many=True, required=False)
 
     class Meta:
         model = Question
-        fields = ["id", "quiz", "text", "type", "marks", "options"]
+        fields = [
+            "id",
+            "quiz",
+            "text",
+            "type",
+            "marks",
+            "options",
+            "starter_code",
+            "test_cases"
+        ]
 
     def create(self, validated_data):
 
-        options_data = validated_data.pop("options")
+        options_data = validated_data.pop("options", [])
+        test_cases_data = validated_data.pop("test_cases", [])
 
         question = Question.objects.create(**validated_data)
 
-        for option in options_data:
-            Option.objects.create(question=question, **option)
+        # 🔹 MCQ case
+        if question.type in ["mcq", "msq"]:
+            for option in options_data:
+                Option.objects.create(question=question, **option)
+
+        # 🔹 Coding case
+        elif question.type == "coding":
+            for test in test_cases_data:
+                TestCase.objects.create(question=question, **test)
 
         return question
 
@@ -111,19 +134,37 @@ class QuizStartSerializer(serializers.Serializer):
         return data    
 
 class QuestionFetchSerializer(serializers.ModelSerializer):
-
-    options = OptionSerializer(many=True)
+    options = OptionSerializer(many=True, required = False)
+    test_cases = TestCaseSerializer(many=True, required=False)
 
     class Meta:
         model = Question
         fields = ["id","text","type","marks","options"]
 
-
 class SubmitAnswerSerializer(serializers.Serializer):
-
     attempt_id = serializers.IntegerField()
     question_id = serializers.IntegerField()
-    option_id = serializers.IntegerField()
+    
+    option_id = serializers.IntegerField(required=False, allow_null=True)
+    code = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        from .models import Question
+
+        question = Question.objects.get(id=data["question_id"])
+
+        # 🔹 Coding
+        if question.type == "coding":
+            # allow empty but ensure key exists
+            if "code" not in data:
+                data["code"] = ""
+
+        # 🔹 MCQ
+        else:
+            if "option_id" not in data:
+                data["option_id"] = None
+
+        return data
 
 
 class UpdateOptionSerializer(serializers.Serializer):
@@ -133,7 +174,15 @@ class UpdateOptionSerializer(serializers.Serializer):
 
 
 class UpdateQuestionSerializer(serializers.Serializer):
+
     question_id = serializers.IntegerField()
     text = serializers.CharField()
     marks = serializers.IntegerField()
-    options = UpdateOptionSerializer(many=True)
+    type = serializers.CharField()
+
+    options = OptionSerializer(many=True, required=False)
+    test_cases = TestCaseSerializer(many=True, required=False)
+    starter_code = serializers.CharField(required=False, allow_blank=True)
+
+    def update(self, instance, validated_data):
+        pass  # not used

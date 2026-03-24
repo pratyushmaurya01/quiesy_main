@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
+import API from "../api/api"
 
 export default function EditQuiz() {
   const { quizId } = useParams()
@@ -9,20 +10,11 @@ export default function EditQuiz() {
   const [isLoading, setIsLoading] = useState(true)
 
   // 1. FIXED: Moved fetchQuestions ABOVE useEffect so it initializes properly
-  const fetchQuestions = async () => {
+    const fetchQuestions = async () => {
     setIsLoading(true)
     try {
-      const token = localStorage.getItem("access")
-      const res = await fetch(
-        `http://127.0.0.1:8000/api/quiz/${quizId}/questions-list/`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      )
-      const data = await res.json()
-      setQuestions(data)
+      const res = await API.get(`quiz/${quizId}/questions-list/`)
+      setQuestions(res.data)
     } catch (err) {
       console.error("Failed to fetch questions:", err)
     } finally {

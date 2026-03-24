@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import ThemeToggle from "../components/ThemeToggle"
+import API from "../api/api"
 
 // NTA Style Status Constants
 const STATUS = {
@@ -31,9 +32,7 @@ export default function QuizAttempt() {
 // Start at 0, we will update it as soon as the API responds
 const [timeLeft, setTimeLeft] = useState(null)
 
-  // --- 1. Fetch Data ---
-  // --- 1. Fetch Data ---
-  // --- 1. Fetch Data ---
+
   useEffect(() => {
     const attemptId = localStorage.getItem("attempt_id")
     if (!attemptId) {
@@ -41,30 +40,29 @@ const [timeLeft, setTimeLeft] = useState(null)
       return
     }
 
+
     const fetchQuestions = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/quiz/${quizCode}/questions/`)
-        const data = await res.json()
-        
-        // 🔥 THE FIX: The API now returns an object with time_limit and questions
+        const res = await API.get(`quiz/${quizCode}/questions/`)
+        const data = res.data
+
         setQuestions(data.questions)
-        
-        // Convert minutes from database into seconds for the timer
-        // Example: 60 mins * 60 = 3600 seconds
+
         if (data.time_limit) {
           setTimeLeft(data.time_limit * 60)
         } else {
-          setTimeLeft(10800) // Fallback to 3 hours if no time limit is set
+          setTimeLeft(10800)
         }
 
-        // Initialize statuses
         const initialStatus = {}
         data.questions.forEach((q, index) => {
-          initialStatus[q.id] = index === 0 ? STATUS.NOT_ANSWERED : STATUS.NOT_VISITED
+          initialStatus[q.id] =
+            index === 0 ? STATUS.NOT_ANSWERED : STATUS.NOT_VISITED
         })
         setQuestionStatus(initialStatus)
+
       } catch (err) {
-        console.error("Failed to fetch questions")
+        console.error("Failed to fetch questions:", err)
       } finally {
         setLoading(false)
       }

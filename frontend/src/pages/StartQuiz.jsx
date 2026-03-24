@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate, useParams, Link } from "react-router-dom"
 import ThemeToggle from "../components/ThemeToggle"
+import API from "../api/api"
 
 export default function StartQuiz() {
   const navigate = useNavigate()
@@ -39,24 +40,24 @@ export default function StartQuiz() {
   const [reviewLoading, setReviewLoading] = useState(false)
 
   // 🔥 FETCH QUIZ INFO ON LOAD
+
   useEffect(() => {
     const fetchInfo = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/quiz-info/${quizCode}/`)
-        const data = await res.json()
-        
-        if (res.ok) {
-          setQuizTitle(data.title)
-          setRequiresPassword(data.requires_password)
-        } else {
-          setError("This quiz link is invalid or has been removed.")
-        }
+        const res = await API.get(`quiz-info/${quizCode}/`)
+        const data = res.data
+
+        setQuizTitle(data.title)
+        setRequiresPassword(data.requires_password)
+
       } catch (err) {
-        setError("Failed to connect to the server.")
+        console.error(err)
+        setError("This quiz link is invalid or has been removed.")
       } finally {
         setInfoLoading(false)
       }
     }
+
     fetchInfo()
   }, [quizCode])
 

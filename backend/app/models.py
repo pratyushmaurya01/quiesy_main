@@ -62,6 +62,7 @@ class Quiz(models.Model):
 class Question(models.Model):
     QUESTION_TYPES = (
         ("mcq", "MCQ"),
+        ("msq" , "MSQ"),
         ("subjective", "Subjective"),
         ("coding", "Coding"),
     )
@@ -69,6 +70,7 @@ class Question(models.Model):
     text = models.TextField()
     type = models.CharField(max_length=20, choices=QUESTION_TYPES, default="mcq")
     marks = models.IntegerField(default=1)
+    starter_code = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.text
@@ -81,6 +83,14 @@ class Option(models.Model):
     def __str__(self):
         return self.text
 
+class TestCase(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="test_cases")
+    input_data = models.TextField()
+    expected_output = models.TextField()
+
+    def __str__(self):
+        return f"TestCase for Q{self.question.id}"
+    
 
 class QuizAttempt(models.Model):
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="attempts")
@@ -103,8 +113,9 @@ class QuizAttempt(models.Model):
 class Answer(models.Model):
     attempt = models.ForeignKey(QuizAttempt, on_delete=models.CASCADE, related_name="answers")
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
-
+    code = models.TextField(null=True, blank=True)
     selected_option = models.ForeignKey(Option, on_delete=models.CASCADE, null=True, blank=True)
     is_correct = models.BooleanField(default=False)
+    language = models.CharField(max_length=10, default="python")
     class Meta:
         unique_together = ["attempt","question"]

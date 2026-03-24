@@ -1,40 +1,31 @@
 import { Link } from "react-router-dom"
 import { useState } from "react"
+import API from "../api/api"
 
 export default function QuizCard({ quiz }) {
 
   const [reviewOn, setReviewOn] = useState(quiz.review_on)
+  const [loading, setLoading] = useState(false)
 
   const handleToggleReview = async () => {
-
-    const token = localStorage.getItem("access")
+    setLoading(true)
 
     try {
-      const res = await fetch(
-        `http://127.0.0.1:8000/api/quiz/${quiz.id}/toggle-review/`,
+      const res = await API.post(
+        `quiz/${quiz.id}/toggle-review/`,
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            review_on: !reviewOn
-          })
+          review_on: !reviewOn
         }
       )
 
-      const data = await res.json()
-
-      if (res.ok) {
-        setReviewOn(data.review_on)
-      }
+      setReviewOn(res.data.review_on)
 
     } catch (err) {
       console.error("Toggle error:", err)
+    } finally {
+      setLoading(false)
     }
   }
-
   return (
     <div className="
       flex flex-col
@@ -139,15 +130,22 @@ export default function QuizCard({ quiz }) {
         {/* Toggle Review */}
         <button
           onClick={handleToggleReview}
+          disabled={loading}
           className={`
-            w-full py-2 px-3 rounded-lg text-sm font-medium
-            ${reviewOn 
-              ? "bg-green-600 hover:bg-green-700 text-white"
-              : "bg-red-600 hover:bg-red-700 text-white"
+            w-full py-2 px-3 rounded-lg text-sm font-medium transition
+            ${loading ? "opacity-60 cursor-not-allowed" : ""}
+            ${
+              reviewOn
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-red-600 hover:bg-red-700 text-white"
             }
           `}
         >
-          {reviewOn ? "Review ON" : "Review OFF"}
+          {loading
+            ? "Updating..."
+            : reviewOn
+            ? "Review ON"
+            : "Review OFF"}
         </button>
 
 

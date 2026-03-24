@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import ThemeToggle from "../components/ThemeToggle"
+import API from "../api/api"
 
 export default function Review() {
   const { attemptId } = useParams()
@@ -28,18 +29,18 @@ export default function Review() {
     return `${m}m ${s}s`
   }
 
+
   useEffect(() => {
     const fetchReview = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/review/${attemptId}/`)
-        const data = await res.json()
+        const res = await API.get(`review/${attemptId}/`)
+        const data = res.data
 
         if (data.review_allowed) {
           setReviewAllowed(true)
           setQuestions(data.data)
-          setTimeTaken(data.time_taken_seconds) // Save time from backend
+          setTimeTaken(data.time_taken_seconds)
 
-          // 🔥 Calculate Performance Stats (Will now work perfectly because data.data has ALL questions)
           let correctCount = 0
           let incorrectCount = 0
           let skippedCount = 0
@@ -48,7 +49,9 @@ export default function Review() {
             if (!q.selected_option) {
               skippedCount++
             } else {
-              const selectedOpt = q.options.find(opt => opt.id === q.selected_option)
+              const selectedOpt = q.options.find(
+                (opt) => opt.id === q.selected_option
+              )
               if (selectedOpt && selectedOpt.is_correct) {
                 correctCount++
               } else {
@@ -62,14 +65,14 @@ export default function Review() {
             correct: correctCount,
             incorrect: incorrectCount,
             skipped: skippedCount,
-            percentage: Math.round((correctCount / data.data.length) * 100) || 0
+            percentage:
+              Math.round((correctCount / data.data.length) * 100) || 0,
           })
-
         } else {
           setReviewAllowed(false)
         }
       } catch (err) {
-        console.error("Error fetching review")
+        console.error("Error fetching review:", err)
       } finally {
         setLoading(false)
       }

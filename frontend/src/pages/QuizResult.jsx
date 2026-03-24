@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import ThemeToggle from "../components/ThemeToggle"
+import API from "../api/api"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 
 export default function QuizResults() {
@@ -10,21 +11,19 @@ export default function QuizResults() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
+
   useEffect(() => {
     const fetchResults = async () => {
       try {
-        const token = localStorage.getItem("access")
-        const res = await fetch(`http://127.0.0.1:8000/api/quiz/${quizId}/results/`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        const result = await res.json()
-        setData(result)
+        const res = await API.get(`quiz/${quizId}/results/`)
+        setData(res.data)
       } catch (error) {
-        console.error("Failed to fetch results", error)
+        console.error("Failed to fetch results:", error)
       } finally {
         setLoading(false)
       }
     }
+
     fetchResults()
   }, [quizId])
 
