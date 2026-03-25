@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/"
+  baseURL: "https://quiesy-8igi.onrender.com/"
 })
 
 export const createQuiz = (data, token) => {
@@ -42,7 +42,7 @@ API.interceptors.response.use(
         const refresh = localStorage.getItem("refresh")
 
         const res = await axios.post(
-          "http://127.0.0.1:8000/api/token/refresh/",
+          "https://quiesy-8igi.onrender.com/api/token/refresh/",
           { refresh }
         )
 
