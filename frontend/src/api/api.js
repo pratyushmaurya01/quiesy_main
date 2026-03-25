@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API = axios.create({
-  baseURL: "https://quiesy-8igi.onrender.com/"
+  baseURL: "https://quiesy-8igi.onrender.com/api/"
 })
 
 export const createQuiz = (data, token) => {
