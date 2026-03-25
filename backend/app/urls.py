@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import teacher_register ,  teacher_login , create_quiz , create_question ,  start_quiz
 from .views import get_quiz_questions , submit_answer , finish_quiz , teacher_quizzes , quiz_detail
 from .views import quiz_questions_list , update_question ,review_quiz , get_attempt_by_email
-from .views import quiz_results ,   toggle_review , get_quiz_info
+from .views import quiz_results ,   toggle_review , get_quiz_info , test_code
 urlpatterns = [
     path("register/", teacher_register),
     path("login/", TokenObtainPairView.as_view()),
@@ -25,5 +25,6 @@ urlpatterns = [
     path("quiz/<int:quiz_id>/results/", quiz_results),
     path("quiz/<int:quiz_id>/toggle-review/", toggle_review),
     path('quiz-info/<uuid:quiz_code>/', get_quiz_info, name='quiz_info'),
+    path("test-code/", test_code),  # jus for tesing the code type qus
 
 ]

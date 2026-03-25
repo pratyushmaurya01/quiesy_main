@@ -139,33 +139,33 @@ class QuestionFetchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ["id","text","type","marks","options"]
+        # 🔥 FIX: Added "starter_code" so the IDE has something to show!
+        fields = ["id","text","type","marks","options","test_cases", "starter_code"]
+
 
 class SubmitAnswerSerializer(serializers.Serializer):
     attempt_id = serializers.IntegerField()
     question_id = serializers.IntegerField()
-    
     option_id = serializers.IntegerField(required=False, allow_null=True)
     code = serializers.CharField(required=False, allow_blank=True)
+    # 🔥 FIX: Added language so the backend knows what language was used
+    language = serializers.CharField(required=False, allow_blank=True) 
 
     def validate(self, data):
         from .models import Question
 
         question = Question.objects.get(id=data["question_id"])
 
-        # 🔹 Coding
         if question.type == "coding":
-            # allow empty but ensure key exists
             if "code" not in data:
                 data["code"] = ""
-
-        # 🔹 MCQ
+            if "language" not in data:
+                data["language"] = "python"
         else:
             if "option_id" not in data:
                 data["option_id"] = None
 
         return data
-
 
 class UpdateOptionSerializer(serializers.Serializer):
     id = serializers.IntegerField()

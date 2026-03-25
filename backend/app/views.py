@@ -190,13 +190,10 @@ def get_quiz_questions(request, quiz_code):
 
 @api_view(["POST"])
 def submit_answer(request):
-
     serializer = SubmitAnswerSerializer(data=request.data)
 
     if serializer.is_valid():
-
         data = serializer.validated_data
-
         attempt = QuizAttempt.objects.get(id=data["attempt_id"])
 
         # ❌ prevent re-submit
@@ -210,18 +207,19 @@ def submit_answer(request):
 
         # 🔥 CASE 1: CODING QUESTION
         if question.type == "coding":
-            code = request.data.get("code", "")
+            code = data.get("code", "")
+            language = data.get("language", "python") # 🔥 FIX: Capture language
 
             Answer.objects.update_or_create(
                 attempt=attempt,
                 question=question,
                 defaults={
                     "code": code,
+                    "language": language, # 🔥 FIX: Save language to DB
                     "selected_option": None,
                     "is_correct": False  # abhi judge nahi kiya
                 }
             )
-
             return Response({"status": "code saved"})
 
         # 🔥 CASE 2: MCQ / MSQ
@@ -242,47 +240,9 @@ def submit_answer(request):
                     "is_correct": is_correct
                 }
             )
-
             return Response({"status": "answer saved"})
 
     return Response(serializer.errors, status=400)
-
-
-@api_view(["POST"])
-def finish_quiz(request):
-
-    attempt_id = request.data.get("attempt_id")
-    
-    try:
-        attempt = QuizAttempt.objects.get(id=attempt_id)
-    except QuizAttempt.DoesNotExist:
-        return Response({"error": "Invalid attempt"})
-
-    answers = attempt.answers.select_related("question", "selected_option")
-
-    score = 0
-
-    for ans in answers:
-        # ye simple jab mcq hoga
-        if ans.selected_option and ans.selected_option.is_correct:
-            score += ans.question.marks
-        # aur ye coding qus ke liye 
-        elif ans.question.type == "coding" and ans.code:
-            coding_marks = evaluate_code(ans.question, ans.code, ans.language)
-            score += coding_marks
-        elif ans.question.type == "coding":
-            score += 0
-
-        
-    attempt.score = score
-
-    attempt.completed_at = timezone.now()
-    attempt.save()
-
-    return Response({
-        "attempt_id": attempt.id
-    })  
-
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -318,6 +278,44 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 
 
+@api_view(["POST"])
+def finish_quiz(request):
+    attempt_id = request.data.get("attempt_id")
+    try:
+        attempt = QuizAttempt.objects.get(id=attempt_id)
+    except QuizAttempt.DoesNotExist:
+        return Response({"error": "Invalid attempt"})
+
+    answers = attempt.answers.select_related("question", "selected_option")
+    score = 0
+
+    for ans in answers:
+        # 🔥 MCQ/MSQ Case
+        if ans.question.type in ["mcq", "msq"]:
+            if ans.selected_option and ans.selected_option.is_correct:
+                score += ans.question.marks
+                ans.is_correct = True  # Save that this was correct
+            else:
+                ans.is_correct = False
+            ans.save()
+            
+        # 🔥 Coding Case
+        elif ans.question.type == "coding":
+            if ans.code:
+                coding_marks = evaluate_code(ans.question, ans.code, ans.language)
+                score += coding_marks
+                # Agar poore marks mile toh correct, warna galat
+                ans.is_correct = (coding_marks == ans.question.marks) and (ans.question.marks > 0)
+            else:
+                ans.is_correct = False
+            ans.save()
+            
+    attempt.score = score
+    attempt.completed_at = timezone.now()
+    attempt.save()
+
+    return Response({"attempt_id": attempt.id})
+
 
 @api_view(["GET"])
 def review_quiz(request, attempt_id):
@@ -328,42 +326,42 @@ def review_quiz(request, attempt_id):
 
     quiz = attempt.quiz
 
-    # 🔥 REVIEW OFF CASE
     if not quiz.review_on:
-        return Response({
-            "review_allowed": False,
-            "message": "Review is not available yet"
-        })
+        return Response({"review_allowed": False, "message": "Review is not available yet"})
 
-    # 🔥 THE FIX: Fetch ALL questions for the quiz, not just the answered ones
     all_questions = quiz.questions.prefetch_related("options")
 
-    # Create a dictionary of the student's answers for quick lookup
-    # Format: {question_id: selected_option_id}
     user_answers = {
-        ans.question.id: ans.selected_option.id if ans.selected_option else None
+        ans.question.id: {
+            "option_id": ans.selected_option.id if ans.selected_option else None,
+            "code": ans.code,
+            "language": ans.language,
+            "is_correct": ans.is_correct # 🔥 Ab hum database se direct correct/incorrect nikal rahe hain
+        }
         for ans in attempt.answers.all()
     }
 
     review_data = []
+    total_quiz_marks = 0
 
     for question in all_questions:
+        total_quiz_marks += question.marks
+        ans_data = user_answers.get(question.id, {})
+        
         review_data.append({
             "question_id": question.id,
             "question_text": question.text,
+            "type": question.type,
             "options": [
-                {
-                    "id": opt.id,
-                    "text": opt.text,
-                    "is_correct": opt.is_correct
-                }
+                {"id": opt.id, "text": opt.text, "is_correct": opt.is_correct}
                 for opt in question.options.all()
             ],
-            # Check if student answered this question, otherwise send None (Skipped)
-            "selected_option": user_answers.get(question.id, None)
+            "selected_option": ans_data.get("option_id"),
+            "submitted_code": ans_data.get("code"),
+            "language": ans_data.get("language"),
+            "is_correct": ans_data.get("is_correct", False) # 🔥 Pass whether it passed or failed
         })
 
-    # 🔥 Calculate Time Taken
     time_taken_sec = 0
     if attempt.started_at and attempt.completed_at:
         time_taken_sec = (attempt.completed_at - attempt.started_at).total_seconds()
@@ -371,7 +369,9 @@ def review_quiz(request, attempt_id):
     return Response({
         "review_allowed": True,
         "data": review_data,
-        "time_taken_seconds": time_taken_sec # Sending time to frontend
+        "time_taken_seconds": time_taken_sec,
+        "student_score": attempt.score or 0, # 🔥 Sending Overall Score
+        "total_marks": total_quiz_marks      # 🔥 Sending Total Marks
     })
 
 @api_view(["POST"])
@@ -492,7 +492,7 @@ def run_python(code, input_data):
             file_path = f.name
 
         result = subprocess.run(
-            ["python3", file_path],
+            ["python", file_path],
             input=input_data,
             text=True,
             capture_output=True,
@@ -620,3 +620,20 @@ def evaluate_code(question, code, language):
     return (passed / total) * question.marks
 
 
+
+
+@api_view(["POST"])
+def test_code(request):
+
+    code = request.data.get("code")
+    language = request.data.get("language", "python")
+    input_data = request.data.get("input", "")
+
+    if not code:
+        return Response({"error": "Code required"}, status=400)
+
+    output = run_code(code, input_data, language)
+
+    return Response({
+        "output": output
+    })

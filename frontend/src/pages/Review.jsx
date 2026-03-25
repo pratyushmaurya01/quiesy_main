@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import ThemeToggle from "../components/ThemeToggle"
 import API from "../api/api"
+import Editor from "@monaco-editor/react"
 
 export default function Review() {
   const { attemptId } = useParams()
@@ -10,7 +11,7 @@ export default function Review() {
   const [loading, setLoading] = useState(true)
   const [reviewAllowed, setReviewAllowed] = useState(false)
   const [questions, setQuestions] = useState([])
-  const [timeTaken, setTimeTaken] = useState(null) // 🔥 New state for time
+  const [timeTaken, setTimeTaken] = useState(null) 
 
   // Derived Statistics
   const [stats, setStats] = useState({
@@ -18,17 +19,17 @@ export default function Review() {
     correct: 0,
     incorrect: 0,
     skipped: 0,
-    percentage: 0
+    percentage: 0,
+    earnedScore: 0,
+    totalMarks: 0
   })
 
-  // Helper to format time
   const formatTimeTaken = (totalSeconds) => {
     if (!totalSeconds && totalSeconds !== 0) return "--"
     const m = Math.floor(totalSeconds / 60)
     const s = Math.floor(totalSeconds % 60)
     return `${m}m ${s}s`
   }
-
 
   useEffect(() => {
     const fetchReview = async () => {
@@ -45,18 +46,18 @@ export default function Review() {
           let incorrectCount = 0
           let skippedCount = 0
 
+          // 🔥 Ab backend ne exact bata diya hai kaunsa sahi hai kaunsa galat
           data.data.forEach((q) => {
-            if (!q.selected_option) {
+            const isSkipped = q.type === "coding" 
+                ? (!q.submitted_code || q.submitted_code.trim() === "")
+                : !q.selected_option
+
+            if (isSkipped) {
               skippedCount++
+            } else if (q.is_correct) {
+              correctCount++
             } else {
-              const selectedOpt = q.options.find(
-                (opt) => opt.id === q.selected_option
-              )
-              if (selectedOpt && selectedOpt.is_correct) {
-                correctCount++
-              } else {
-                incorrectCount++
-              }
+              incorrectCount++
             }
           })
 
@@ -65,8 +66,9 @@ export default function Review() {
             correct: correctCount,
             incorrect: incorrectCount,
             skipped: skippedCount,
-            percentage:
-              Math.round((correctCount / data.data.length) * 100) || 0,
+            percentage: data.total_marks > 0 ? Math.round((data.student_score / data.total_marks) * 100) : 0,
+            earnedScore: data.student_score, // 🔥 Exact score from DB
+            totalMarks: data.total_marks     // 🔥 Total possible marks
           })
         } else {
           setReviewAllowed(false)
@@ -90,7 +92,6 @@ export default function Review() {
     )
   }
 
-  // ❌ Review not allowed
   if (!reviewAllowed) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white p-6 transition-colors">
@@ -110,7 +111,12 @@ export default function Review() {
     )
   }
 
-  // ✅ Review allowed - Dashboard UI
+  const getLang = (lang) => {
+    if (lang === "java") return "java"
+    if (lang === "cpp") return "cpp"
+    return "python" 
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-sans transition-colors duration-200 pb-20">
       
@@ -137,36 +143,40 @@ export default function Review() {
         <div className="mb-12">
           <h1 className="text-3xl font-bold mb-6 tracking-tight">Your Scorecard</h1>
           
-          {/* 🔥 Updated Grid to fit the new Time Taken Card */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             
-            {/* Percentage Card */}
-            <div className="col-span-2 md:col-span-1 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
-              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Score</span>
-              <div className="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                {stats.percentage}%
+            {/* 🔥 Overall Score showing exactly how many marks earned out of total */}
+            <div className="col-span-2 md:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
+              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Overall Score</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                  {stats.earnedScore}
+                </span>
+                <span className="text-xl font-bold text-slate-400 dark:text-slate-500">
+                  / {stats.totalMarks}
+                </span>
               </div>
+              <span className="text-xs text-slate-400 dark:text-slate-500 mt-2">({stats.percentage}%)</span>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="col-span-1 md:col-span-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Correct</span>
               <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">{stats.correct}</div>
             </div>
             
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="col-span-1 md:col-span-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Incorrect</span>
               <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">{stats.incorrect}</div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="col-span-1 md:col-span-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Skipped</span>
               <div className="text-3xl font-bold text-slate-600 dark:text-slate-300 mt-1">{stats.skipped}</div>
             </div>
 
-            {/* 🔥 New Time Taken Card */}
-            <div className="col-span-2 md:col-span-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="col-span-1 md:col-span-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center text-center">
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Time Taken</span>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{formatTimeTaken(timeTaken)}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{formatTimeTaken(timeTaken)}</div>
             </div>
 
           </div>
@@ -181,17 +191,19 @@ export default function Review() {
           <div className="space-y-6">
             {questions.map((q, index) => {
               
-              // Determine status for the badge
               let statusBadge = null
-              if (!q.selected_option) {
+              
+              const isSkipped = q.type === "coding" 
+                  ? (!q.submitted_code || q.submitted_code.trim() === "")
+                  : !q.selected_option
+
+              // 🔥 Now badges work perfectly for both MCQ and Coding!
+              if (isSkipped) {
                 statusBadge = <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Skipped</span>
+              } else if (q.is_correct) {
+                statusBadge = <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-green-200 dark:border-green-800">Correct</span>
               } else {
-                const selectedOpt = q.options.find(opt => opt.id === q.selected_option)
-                if (selectedOpt && selectedOpt.is_correct) {
-                  statusBadge = <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-green-200 dark:border-green-800">Correct</span>
-                } else {
-                  statusBadge = <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-red-200 dark:border-red-800">Incorrect</span>
-                }
+                statusBadge = <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-red-200 dark:border-red-800">Incorrect</span>
               }
 
               return (
@@ -208,36 +220,66 @@ export default function Review() {
                     </div>
                   </div>
 
-                  {/* Options List */}
-                  <div className="space-y-3 mt-6">
-                    {q.options.map(opt => {
-                      const isSelected = opt.id === q.selected_option
-                      const isCorrect = opt.is_correct
-
-                      // Styling logic for options
-                      let optionStyle = "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300"
-                      let icon = null
-
-                      if (isCorrect) {
-                        optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 ring-1 ring-green-500"
-                        icon = <svg className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                      } else if (isSelected && !isCorrect) {
-                        optionStyle = "border-red-400 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300"
-                        icon = <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                      }
-
-                      return (
-                        <div key={opt.id} className={`p-4 rounded-xl border flex justify-between items-center transition-colors ${optionStyle}`}>
-                          <span className="font-medium pr-4">{opt.text}</span>
-                          
-                          <div className="flex items-center gap-3">
-                            {isSelected && <span className="text-xs font-bold uppercase tracking-wider opacity-70">Your Answer</span>}
-                            {icon}
-                          </div>
+                  {q.type === "coding" ? (
+                     
+                     <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                        <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 flex justify-between items-center border-b border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-mono text-slate-600 dark:text-slate-300">
+                            Language: {q.language || "Not Selected"}
+                          </span>
                         </div>
-                      )
-                    })}
-                  </div>
+                        
+                        {q.submitted_code ? (
+                          <Editor
+                            height="300px"
+                            language={getLang(q.language)}
+                            value={q.submitted_code}
+                            theme="vs-dark"
+                            options={{ 
+                              readOnly: true,
+                              minimap: { enabled: false },
+                              scrollBeyondLastLine: false,
+                              fontSize: 14,
+                            }}
+                          />
+                        ) : (
+                          <div className="p-8 text-center bg-white dark:bg-slate-900">
+                            <span className="text-slate-500 font-medium">No code was submitted for this question.</span>
+                          </div>
+                        )}
+                     </div>
+
+                  ) : (
+
+                    <div className="space-y-3 mt-6">
+                      {q.options.map(opt => {
+                        const isSelected = opt.id === q.selected_option
+                        const isCorrect = opt.is_correct
+
+                        let optionStyle = "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300"
+                        let icon = null
+
+                        if (isCorrect) {
+                          optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 ring-1 ring-green-500"
+                          icon = <svg className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                        } else if (isSelected && !isCorrect) {
+                          optionStyle = "border-red-400 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300"
+                          icon = <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        }
+
+                        return (
+                          <div key={opt.id} className={`p-4 rounded-xl border flex justify-between items-center transition-colors ${optionStyle}`}>
+                            <span className="font-medium pr-4">{opt.text}</span>
+                            
+                            <div className="flex items-center gap-3">
+                              {isSelected && <span className="text-xs font-bold uppercase tracking-wider opacity-70">Your Answer</span>}
+                              {icon}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
 
                 </div>
               )
