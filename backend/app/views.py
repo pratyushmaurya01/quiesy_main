@@ -113,6 +113,26 @@ def update_question(request):
 
     return Response(serializer.errors, status=400)
 
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_quiz(request, quiz_id):
+    try:
+        quiz = Quiz.objects.get(id=quiz_id)
+
+        # IMPORTANT: only creator can delete
+        if quiz.teacher != request.user:
+            return Response({"error": "Not allowed"}, status=403)
+
+        quiz.delete()
+        return Response({"message": "Quiz deleted successfully"}, status=200)
+
+    except Quiz.DoesNotExist:
+        return Response({"error": "Quiz not found"}, status=404)
+
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def teacher_quizzes(request):
