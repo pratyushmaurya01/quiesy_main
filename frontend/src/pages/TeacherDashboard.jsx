@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import QuizCard from "../components/QuizCard"
-import Navbar from "../components/navbar"
+import Navbar from "../components/Navbar"
 import { Link } from "react-router-dom"
 import API from "../api/api"
 
