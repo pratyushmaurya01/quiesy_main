@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom" // 🔥 Added useNavigate
+import API from "../api/api"
 
 export default function Login({ onSuccess, onClose }) {
   const [form, setForm] = useState({
@@ -24,38 +25,27 @@ export default function Login({ onSuccess, onClose }) {
     setLoading(true)
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/login/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(form)
-      })
+      const res = await API.post("login/", form)
+      const data = res.data
 
-      const data = await res.json()
-
-      if (res.ok) {
-        // 1. Save Tokens
-        localStorage.setItem("access", data.access)
-        localStorage.setItem("refresh", data.refresh)
-        
-        // 2. If it's a modal, trigger the success function to close it
-        if (onSuccess) {
-          onSuccess()
-        }
-
-        // 3. 🔥 IMMEDIATELY NAVIGATE TO DASHBOARD
-        navigate("/dashboard") 
-        
-      } else {
-        if (data.detail) {
-          setError(data.detail)
-        } else {
-          setError("Invalid email or password")
-        }
+      // 1. Save Tokens
+      localStorage.setItem("access", data.access)
+      localStorage.setItem("refresh", data.refresh)
+      
+      // 2. If it's a modal, trigger the success function to close it
+      if (onSuccess) {
+        onSuccess()
       }
+
+      // 3. 🔥 IMMEDIATELY NAVIGATE TO DASHBOARD
+      navigate("/dashboard") 
+      
     } catch (err) {
-      setError("Something went wrong. Try again.")
+      if (err.response && err.response.data) {
+        setError(err.response.data.detail || "Invalid email or password")
+      } else {
+        setError("Something went wrong. Try again.")
+      }
     } finally {
       setLoading(false)
     }

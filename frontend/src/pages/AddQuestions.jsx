@@ -75,7 +75,6 @@ export default function AddQuestions() {
       return
     }
 
-    const token = localStorage.getItem("access")
     let body = {}
 
     // 🔥 MCQ
@@ -105,30 +104,24 @@ export default function AddQuestions() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/create-question/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(body)
+      await API.post("create-question/", body)
+
+      setQuestionCount(prev => prev + 1)
+      setQuestion({
+        text: "",
+        marks: 1,
+        options: ["", "", "", ""],
+        correctIndex: 0,
+        starter_code: "",
+        test_cases: [{ input_data: "", expected_output: "" }]
       })
 
-      if (res.ok) {
-        setQuestionCount(prev => prev + 1)
-        setQuestion({
-          text: "",
-          marks: 1,
-          options: ["", "", "", ""],
-          correctIndex: 0,
-          starter_code: "",
-          test_cases: [{ input_data: "", expected_output: "" }]
-        })
-      } else {
-        alert("Failed to save question.")
-      }
     } catch (error) {
-      alert("Network error.")
+      if (error.response) {
+        alert("Failed to save question.")
+      } else {
+        alert("Network error.")
+      }
     }
   }
 

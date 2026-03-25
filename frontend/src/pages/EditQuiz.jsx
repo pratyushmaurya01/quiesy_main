@@ -69,10 +69,9 @@ export default function EditQuiz() {
     fetchQuestions() 
   }
 
-  // 3. FIXED: Added error handling to Save
+
   const handleSave = async (q) => {
     try {
-      const token = localStorage.getItem("access")
       const body = {
         question_id: q.id,
         text: q.text,
@@ -80,26 +79,18 @@ export default function EditQuiz() {
         options: q.options
       }
 
-      const res = await fetch(
-        "http://127.0.0.1:8000/api/update-question/",
-        {
-          method: "PUT", // Ensure backend supports PUT for this endpoint
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(body)
-        }
-      )
+      await API.put("update-question/", body)
 
-      if (res.ok) {
-        setEditingId(null)
-      } else {
-        alert("Failed to save. Please check your backend connection.")
-      }
+      setEditingId(null)
+
     } catch (err) {
       console.error(err)
-      alert("An error occurred while saving.")
+
+      if (err.response) {
+        alert("Failed to save. Please check your backend connection.")
+      } else {
+        alert("An error occurred while saving.")
+      }
     }
   }
 

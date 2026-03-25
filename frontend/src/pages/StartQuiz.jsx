@@ -75,21 +75,25 @@ export default function StartQuiz() {
     setError("")
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/start-quiz/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, quiz_code: quizCode })
+      const res = await API.post("start-quiz/", {
+        ...form,
+        quiz_code: quizCode
       })
-      const data = await res.json()
-      
-      if (res.ok) {
-        localStorage.setItem("attempt_id", data.attempt_id)
-        navigate(`/quiz/${quizCode}`)
-      } else {
-        setError(data.error || "Failed to start quiz. Please check your details.")
-      }
+
+      const data = res.data
+
+      localStorage.setItem("attempt_id", data.attempt_id)
+      navigate(`/quiz/${quizCode}`)
+
     } catch (err) {
-      setError("Network error. Try again.")
+      if (err.response && err.response.data) {
+        setError(
+          err.response.data.error ||
+          "Failed to start quiz. Please check your details."
+        )
+      } else {
+        setError("Network error. Try again.")
+      }
     } finally {
       setLoading(false)
     }
@@ -100,25 +104,28 @@ export default function StartQuiz() {
     setReviewError("")
   }
 
+
   const handleReviewSubmit = async (e) => {
     e.preventDefault()
     setReviewLoading(true)
     setReviewError("")
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/get-attempt/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: reviewForm.email, quiz_code: quizCode })
+      const res = await API.post("get-attempt/", {
+        email: reviewForm.email,
+        quiz_code: quizCode
       })
-      const data = await res.json()
-      if (res.ok) {
-        navigate(`/review/${data.attempt_id}`)
-      } else {
-        setReviewError(data.error || "No attempt found for this email.")
-      }
+
+      const data = res.data
+
+      navigate(`/review/${data.attempt_id}`)
+
     } catch (err) {
-      setReviewError("Network error. Try again.")
+      if (err.response && err.response.data) {
+        setReviewError(err.response.data.error || "No attempt found for this email.")
+      } else {
+        setReviewError("Network error. Try again.")
+      }
     } finally {
       setReviewLoading(false)
     }
