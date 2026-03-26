@@ -112,14 +112,16 @@ export default function QuizAttempt() {
 
     for (let i = 0; i < currentQ.test_cases.length; i++) {
       const tc = currentQ.test_cases[i]
+
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/test-code/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, language, input: tc.input_data })
+        const res = await API.post("test-code/", {
+          code,
+          language,
+          input: tc.input_data
         })
-        const data = await res.json()
-        
+
+        const data = res.data
+
         const actual = (data.output || "").trim()
         const expected = (tc.expected_output || "").trim()
 
@@ -128,13 +130,15 @@ export default function QuizAttempt() {
         } else {
           currentOutput += `❌ Test Case ${i + 1}: Failed\n   Input: ${tc.input_data}\n   Expected: ${expected}\n   Your Output: ${actual}\n\n`
         }
+
       } catch (err) {
         currentOutput += `⚠️ Test Case ${i + 1}: Server Error\n`
       }
-    }
+  }
     
     setOutput(currentOutput)
   }
+
 
   const saveAnswer = async () => {
     const attemptId = localStorage.getItem("attempt_id")
@@ -155,22 +159,22 @@ export default function QuizAttempt() {
         bodyData.option_id = optionId
       }
 
-      await fetch("http://127.0.0.1:8000/api/submit-answer/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyData)
-      })
+      await API.post("submit-answer/", bodyData)
       
       if (currentQ.type === "coding") {
-         setOutput(prev => prev + "\n💾 Code successfully saved to database!\n")
+        setOutput(prev => prev + "\n💾 Code successfully saved to database!\n")
       }
       
-      setQuestionStatus(prev => ({...prev, [currentQ.id]: STATUS.ANSWERED}))
+      setQuestionStatus(prev => ({
+        ...prev,
+        [currentQ.id]: STATUS.ANSWERED
+      }))
 
     } catch (err) {
       console.error("Save failed", err)
+
       if (currentQ.type === "coding") {
-         setOutput(prev => prev + "\n❌ Failed to save code to database.\n")
+        setOutput(prev => prev + "\n❌ Failed to save code to database.\n")
       }
     } finally {
       setIsSaving(false)
@@ -192,26 +196,30 @@ export default function QuizAttempt() {
     }
   }
 
+
   const handleFinalSubmit = async (autoSubmit = false) => {
     if (!autoSubmit) {
-      const confirmSubmit = window.confirm("Are you sure you want to submit the test? You cannot change your answers after this.")
+      const confirmSubmit = window.confirm(
+        "Are you sure you want to submit the test? You cannot change your answers after this."
+      )
       if (!confirmSubmit) return
     }
 
-    setIsSubmitting(true) 
-    await saveAnswer() 
-    
+    setIsSubmitting(true)
+    await saveAnswer()
+
     const attemptId = localStorage.getItem("attempt_id")
+
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/finish_quiz/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attempt_id: attemptId })
+      const res = await API.post("finish_quiz/", {
+        attempt_id: attemptId
       })
 
-      const data = await res.json()
+      const data = res.data
+
       localStorage.removeItem("attempt_id")
       navigate(`/review/${data.attempt_id}`)
+
     } catch (err) {
       console.error("Failed to submit test", err)
       setIsSubmitting(false)
