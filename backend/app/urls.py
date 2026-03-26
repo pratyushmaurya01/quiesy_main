@@ -7,7 +7,7 @@ from .views import quiz_questions_list , update_question ,review_quiz , get_atte
 from .views import quiz_results ,toggle_review , get_quiz_info , test_code , delete_quiz
 urlpatterns = [
     path("register/", teacher_register),
-    path("login/", TokenObtainPairView.as_view()),
+    # path("login/", TokenObtainPairView.as_view()),
     path("refresh/", TokenRefreshView.as_view()),
     path('login/' , teacher_login),
     path('create-quiz/' , create_quiz),
