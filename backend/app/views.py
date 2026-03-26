@@ -30,23 +30,22 @@ def teacher_register(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny]) # 🔥 Ye line bohot zaroori hai! Ye sabko login karne degi
 def teacher_login(request):
-
     serializer = TeacherLoginSerializer(data=request.data)
-
+    
     if serializer.is_valid():
         user = serializer.validated_data["user"]
-
         refresh = RefreshToken.for_user(user)
-
+        
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "email": user.email
         })
-
-    return Response(serializer.errors)
-
+        
+    # Agar password galat ho toh 400 error return karo
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["POST"])

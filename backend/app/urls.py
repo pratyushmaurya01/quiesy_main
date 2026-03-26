@@ -8,7 +8,7 @@ from .views import quiz_results ,toggle_review , get_quiz_info , test_code , del
 urlpatterns = [
     path("register/", teacher_register),
     # path("login/", TokenObtainPairView.as_view()),
-    path("refresh/", TokenRefreshView.as_view()),
+    path("token/refresh/", TokenRefreshView.as_view()),
     path('login/' , teacher_login),
     path('create-quiz/' , create_quiz),
     path("teacher-quizzes/", teacher_quizzes),
