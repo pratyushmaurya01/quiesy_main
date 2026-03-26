@@ -12,6 +12,7 @@ from . serializers import SubmitAnswerSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import AllowAny
 import threading
 import subprocess
 import tempfile
