@@ -12,14 +12,14 @@ class TeacherRegisterSerializer(serializers.ModelSerializer):
         fields = ["email", "name", "password"]
 
     def create(self, validated_data):
-        user = User.objects.create_user(
+        # 🔥 EXACT FIX: Isse guarantee milti hai ki password HASH hoga
+        user = User(
             email=validated_data["email"],
-            name=validated_data["name"],
-            password=validated_data["password"]
+            name=validated_data["name"]
         )
+        user.set_password(validated_data["password"]) # Hashing Magic
+        user.save()
         return user
-    
-
 
 class TeacherLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
