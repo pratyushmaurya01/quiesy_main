@@ -1,8 +1,8 @@
 <h1 align="center">Quiesy</h1>
-
+| https://quiesy.netlify.app/
 <p align="center">
   <b>Master assessments with next-gen tools.</b><br />
-  A modern, dual-mode assessment platform for educators and coding bootcamps.
+  A modern, dual-mode assessment platform for educators.
 </p>
 
 <p align="center">
