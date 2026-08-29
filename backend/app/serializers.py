@@ -1,38 +1,10 @@
 from rest_framework import serializers
-from .models import User , Quiz , Question , Option , QuizAttempt , Answer , TestCase
+from .models import  Quiz , Question , Option , QuizAttempt , Answer , TestCase
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 
 
-class TeacherRegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
 
-    class Meta:
-        model = User
-        fields = ["email", "name", "password"]
-
-    def create(self, validated_data):
-        # 🔥 EXACT FIX: Isse guarantee milti hai ki password HASH hoga
-        user = User(
-            email=validated_data["email"],
-            name=validated_data["name"]
-        )
-        user.set_password(validated_data["password"]) # Hashing Magic
-        user.save()
-        return user
-
-class TeacherLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
-    def validate(self, data):
-        user = authenticate(email=data["email"], password=data["password"])
-
-        if not user:
-            raise serializers.ValidationError("Invalid credentials")
-
-        data["user"] = user
-        return data
 
 
 

@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .serializers import TeacherLoginSerializer,QuestionSerializer ,TeacherRegisterSerializer 
+from .serializers import QuestionSerializer 
 from django.contrib.auth import login
 from . models import QuizAttempt , Quiz , Question , Option , Answer , TestCase
 from .serializers import QuizSerializer , QuizStartSerializer , QuestionFetchSerializer , UpdateQuestionSerializer
@@ -18,36 +18,6 @@ import subprocess
 import tempfile
 
 execution_lock = threading.Lock()
-
-@api_view(["POST"])
-def teacher_register(request):
-
-    serializer = TeacherRegisterSerializer(data=request.data)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny]) # 🔥 Ye line bohot zaroori hai! Ye sabko login karne degi
-def teacher_login(request):
-    serializer = TeacherLoginSerializer(data=request.data)
-    
-    if serializer.is_valid():
-        user = serializer.validated_data["user"]
-        refresh = RefreshToken.for_user(user)
-        
-        return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "email": user.email
-        })
-        
-    # Agar password galat ho toh 400 error return karo
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

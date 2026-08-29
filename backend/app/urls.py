@@ -1,15 +1,13 @@
 from django.urls import path
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import teacher_register ,  teacher_login , create_quiz , create_question ,  start_quiz
+from .views import  create_quiz , create_question ,  start_quiz
 from .views import get_quiz_questions , submit_answer , finish_quiz , teacher_quizzes , quiz_detail
 from .views import quiz_questions_list , update_question ,review_quiz , get_attempt_by_email
 from .views import quiz_results ,toggle_review , get_quiz_info , test_code , delete_quiz
 urlpatterns = [
-    path("register/", teacher_register),
     # path("login/", TokenObtainPairView.as_view()),
     path("token/refresh/", TokenRefreshView.as_view()),
-    path('login/' , teacher_login),
     path('create-quiz/' , create_quiz),
     path("teacher-quizzes/", teacher_quizzes),
     path("create-question/", create_question),
