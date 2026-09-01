@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import ThemeToggle from "../components/ThemeToggle"
-import API from "../api/api"
+import ThemeToggle from "../../components/ThemeToggle"
+import API from "../../api/api"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 
 export default function QuizResults() {

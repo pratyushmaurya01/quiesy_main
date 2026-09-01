@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import Navbar from "../components/Navbar" 
-import Login from "./Login" 
+import Navbar from "../../components/Navbar" 
+import Login from "../auth/Login" 
 
 export default function Home() {
   const [showLoginModal, setShowLoginModal] = useState(false)

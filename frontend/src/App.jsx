@@ -1,51 +1,148 @@
 import { useEffect } from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 
-import Home from "./pages/Home"
-import TeacherDashboard from "./pages/TeacherDashboard"
-import CreateQuiz from "./pages/CreateQuiz"
-import Login from "./pages/Login"
-import Register from "./pages/Register"
-import AddQuestions from "./pages/AddQuestions"
-import EditQuiz from "./pages/EditQuiz"
-import ProtectedRoute from "./components/ProtectedRoute"
-import StartQuiz from "./pages/StartQuiz"
-import QuizAttempt from "./pages/QuizAttempt"
-import Review from "./pages/Review"
-import QuizResults from "./pages/QuizResult"
+import Home from "./pages/shared/Home"
+
+import Login from "./pages/auth/Login"
+import Register from "./pages/auth/Register"
+import VerifyEmail from "./pages/auth/VerifyEmail"
+import ForgotPassword from "./pages/auth/ForgotPassword"
+import ResetPassword from "./pages/auth/ResetPassword"
+
+import TeacherDashboard from "./pages/teacher/TeacherDashboard"
+import CreateQuiz from "./pages/teacher/CreateQuiz"
+import AddQuestions from "./pages/teacher/AddQuestions"
+import EditQuiz from "./pages/teacher/EditQuiz"
+
+import StudentDashboard from "./pages/student/StudentDashboard"
+import AdminDashboard from "./pages/admin/AdminDashboard"
+
+import StartQuiz from "./pages/shared/StartQuiz"
+import QuizAttempt from "./pages/shared/QuizAttempt"
+import Review from "./pages/shared/Review"
+import QuizResults from "./pages/shared/QuizResult"
+
+import RoleBasedRoute from "./components/RoleBasedRoute"
 
 function App() {
-  
-  // 🔥 ADDED: This runs once when the app loads to apply the saved theme
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme")
-    if (savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-  }, [])
+    useEffect(() => {
+        const savedTheme = localStorage.getItem("theme")
 
-  return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/quiz/:quizCode/start" element={<StartQuiz/>} /> 
-        <Route path="/quiz/:quizCode" element={<QuizAttempt/>} />
-        <Route path="review/:attemptId" element = {<Review/>} />
-        
-        {/* Protected Routes */}
-        <Route path="/dashboard" element={<ProtectedRoute><TeacherDashboard /></ProtectedRoute>} />
-        <Route path="/create-quiz" element={<ProtectedRoute><CreateQuiz /></ProtectedRoute>} />
-        <Route path="/add-questions/:quizId" element={<ProtectedRoute><AddQuestions /></ProtectedRoute>} />
-        <Route path="/edit-quiz/:quizId" element={<ProtectedRoute><EditQuiz /></ProtectedRoute>} />
-        <Route path="/quiz/:quizId/results"element={<ProtectedRoute> <QuizResults /> </ProtectedRoute>} />
-      </Routes>
-    </BrowserRouter>
-  )
+        if (
+            savedTheme === "dark" ||
+            (
+                !savedTheme &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches
+            )
+        ) {
+            document.documentElement.classList.add("dark")
+        } else {
+            document.documentElement.classList.remove("dark")
+        }
+    }, [])
+
+    return (
+        <BrowserRouter>
+            <Routes>
+
+                {/* Public Routes */}
+                <Route path="/" element={<Home />} />
+
+                {/* Authentication Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route
+                    path="/reset-password/:uid/:token"
+                    element={<ResetPassword />}
+                />
+
+                {/* Public Quiz Routes */}
+                <Route
+                    path="/quiz/:quizCode/start"
+                    element={<StartQuiz />}
+                />
+
+                <Route
+                    path="/quiz/:quizCode"
+                    element={<QuizAttempt />}
+                />
+
+                <Route
+                    path="/review/:attemptId"
+                    element={<Review />}
+                />
+
+                {/* Teacher Routes */}
+                <Route
+                    path="/dashboard"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <TeacherDashboard />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/create-quiz"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <CreateQuiz />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/add-questions/:quizId"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <AddQuestions />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/edit-quiz/:quizId"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <EditQuiz />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/quiz/:quizId/results"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <QuizResults />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                {/* Student Routes */}
+                <Route
+                    path="/student-dashboard"
+                    element={
+                        <RoleBasedRoute allowedRoles={["STUDENT"]}>
+                            <StudentDashboard />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                {/* Admin Routes */}
+                <Route
+                    path="/admin"
+                    element={
+                        <RoleBasedRoute allowedRoles={["ADMIN"]}>
+                            <AdminDashboard />
+                        </RoleBasedRoute>
+                    }
+                />
+
+            </Routes>
+        </BrowserRouter>
+    )
 }
 
 export default App

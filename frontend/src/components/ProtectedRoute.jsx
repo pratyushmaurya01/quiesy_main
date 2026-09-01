@@ -1,12 +1,19 @@
-import { Navigate } from "react-router-dom"
+import { Navigate, useLocation } from "react-router-dom"
 
 export default function ProtectedRoute({ children }) {
+    const location = useLocation()
+    const accessToken = localStorage.getItem("access")
+    const refreshToken = localStorage.getItem("refresh")
 
-  const token = localStorage.getItem("access")
+    if (!accessToken && !refreshToken) {
+        return (
+            <Navigate
+                to="/login"
+                state={{ from: location }}
+                replace
+            />
+        )
+    }
 
-  if (!token) {
-    return <Navigate to="/login" />
-  }
-
-  return children
+    return children
 }

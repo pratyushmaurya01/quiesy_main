@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import API from "../api/api"
+import API from "../../api/api"
 
 export default function EditQuiz() {
   const { quizId } = useParams()

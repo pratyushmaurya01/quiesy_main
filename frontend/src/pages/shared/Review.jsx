@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
-import ThemeToggle from "../components/ThemeToggle"
-import API from "../api/api"
+import ThemeToggle from "../../components/ThemeToggle"
+import API from "../../api/api"
 import Editor from "@monaco-editor/react"
 
 export default function Review() {

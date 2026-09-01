@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
-import ThemeToggle from "../components/ThemeToggle"
-import API from "../api/api"
+import ThemeToggle from "../../components/ThemeToggle"
+import API from "../../api/api"
 
 export default function AddQuestions() {
   const { quizId } = useParams()

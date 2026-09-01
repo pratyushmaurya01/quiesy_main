@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import ThemeToggle from "../components/ThemeToggle"
-import API from "../api/api"
+import ThemeToggle from "../../components/ThemeToggle"
+import API from "../../api/api"
 import Editor from "@monaco-editor/react"
 
 const STATUS = {
