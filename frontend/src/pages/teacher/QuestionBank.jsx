@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import TeacherShell from "../../components/layout/TeacherShell"
 import QuestionFilters from "../../components/questions/QuestionFilters"
 import QuestionRow from "../../components/questions/QuestionRow"
+import { useNavigate } from "react-router-dom"
 import {
     deactivateQuestion,
     getQuestions,
@@ -24,6 +25,7 @@ export default function QuestionBank() {
     const [previous, setPrevious] = useState(null)
 
     const [selected, setSelected] = useState([])
+    const navigate = useNavigate()
 
     const loadQuestions = useCallback(async () => {
         setLoading(true)
@@ -166,8 +168,24 @@ export default function QuestionBank() {
                                 <svg className="w-[18px] h-[18px] text-on-surface-variant dark:text-[#9ca3af]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                                 Import CSV
                             </button>
-                            <button className="bg-primary dark:bg-blue-600 text-on-primary dark:text-white px-5 py-2.5 rounded-lg text-[13px] font-semibold hover:bg-on-primary-fixed-variant dark:hover:bg-blue-500 transition-colors flex items-center gap-2 shadow-sm focus:ring-2 focus:ring-primary-container dark:focus:ring-blue-400 focus:outline-none">
-                                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                            <button
+                                type="button"
+                                onClick={() => navigate("/create-question")}
+                                className="bg-primary dark:bg-blue-600 text-on-primary dark:text-white px-5 py-2.5 rounded-lg text-[13px] font-semibold hover:bg-on-primary-fixed-variant dark:hover:bg-blue-500 transition-colors flex items-center gap-2 shadow-sm focus:ring-2 focus:ring-primary-container dark:focus:ring-blue-400 focus:outline-none"
+                            >
+                                <svg
+                                    className="w-[18px] h-[18px]"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        d="M12 4v16m8-8H4"
+                                    />
+                                </svg>
                                 Create Question
                             </button>
                         </div>

@@ -6,6 +6,7 @@ export const getQuestions = (params = {}) => {
     })
 }
 
+
 export const getQuestion = (id) => {
     return API.get(`quizzes/questions/${id}/`)
 }
@@ -24,4 +25,9 @@ export const deactivateQuestion = (id) => {
 
 export const getQuestionVersions = () => {
     return API.get("quizzes/question-versions/")
+}
+
+
+export const createQuiz = (data) => {
+    return API.post("quizzes/quizzes/", data)
 }

@@ -14,6 +14,7 @@ import CreateQuiz from "./pages/teacher/CreateQuiz"
 import AddQuestions from "./pages/teacher/AddQuestions"
 import EditQuiz from "./pages/teacher/EditQuiz"
 import QuestionBank from "./pages/teacher/QuestionBank"
+import CreateQuestion from "./pages/teacher/CreateQuestion"
 
 import StudentDashboard from "./pages/student/StudentDashboard"
 import AdminDashboard from "./pages/admin/AdminDashboard"
@@ -126,6 +127,15 @@ function App() {
                     element={
                         <RoleBasedRoute allowedRoles={["TEACHER"]}>
                             <QuestionBank />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/create-question"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <CreateQuestion />
                         </RoleBasedRoute>
                     }
                 />
