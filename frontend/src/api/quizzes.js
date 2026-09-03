@@ -6,7 +6,6 @@ export const getQuestions = (params = {}) => {
     })
 }
 
-
 export const getQuestion = (id) => {
     return API.get(`quizzes/questions/${id}/`)
 }
@@ -27,7 +26,30 @@ export const getQuestionVersions = () => {
     return API.get("quizzes/question-versions/")
 }
 
-
 export const createQuiz = (data) => {
     return API.post("quizzes/quizzes/", data)
+}
+
+export const getQuiz = (id) => {
+    return API.get(`quizzes/quizzes/${id}/`)
+}
+
+export const getQuizzes = () => {
+    return API.get("quizzes/quizzes/")
+}
+
+export const getQuizQuestions = () => {
+    return API.get("quizzes/quiz-questions/")
+}
+
+export const addQuestionToQuiz = (data) => {
+    return API.post("quizzes/quiz-questions/", data)
+}
+
+export const updateQuizQuestion = (id, data) => {
+    return API.patch(`quizzes/quiz-questions/${id}/`, data)
+}
+
+export const removeQuestionFromQuiz = (id) => {
+    return API.delete(`quizzes/quiz-questions/${id}/`)
 }
