@@ -96,6 +96,15 @@ function App() {
                 />
 
                 <Route
+                    path="/add-questions"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <AddQuestions />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
                     path="/add-questions/:quizId"
                     element={
                         <RoleBasedRoute allowedRoles={["TEACHER"]}>
