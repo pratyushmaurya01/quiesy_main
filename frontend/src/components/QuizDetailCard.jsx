@@ -1,39 +1,26 @@
-function Icon({ name, className = "w-5 h-5" }) {
-    const common = {
-        className,
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "1.8",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        viewBox: "0 0 24 24",
-    }
-
+function Icon({ name, className = "h-5 w-5" }) {
     const icons = {
-        book: (
+        quiz: (
             <>
-                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
-                <path d="M8 7h8M8 11h7M8 15h4" />
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+                <path d="M8 8h8M8 12h8M8 16h5" />
             </>
         ),
-        clock: (
+        edit: (
             <>
-                <circle cx="12" cy="12" r="8.5" />
-                <path d="M12 7v5l3 2" />
+                <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+                <path d="m13 6 4 4" />
             </>
         ),
-        question: (
+        questions: (
             <>
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-                <path d="M8 8h8M8 12h6M8 16h4" />
+                <path d="M5 5h14v14H5z" />
+                <path d="M9 9h6M9 13h6M9 17h3" />
             </>
         ),
-        users: (
+        results: (
             <>
-                <circle cx="9" cy="9" r="3" />
-                <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
-                <path d="M16 6.5a3 3 0 0 1 0 5.8" />
-                <path d="M17 14.5a5.5 5.5 0 0 1 4 5.5" />
+                <path d="M5 19V9M12 19V5M19 19v-7" />
             </>
         ),
         calendar: (
@@ -42,49 +29,61 @@ function Icon({ name, className = "w-5 h-5" }) {
                 <path d="M8 3v4M16 3v4M4 10h16" />
             </>
         ),
-        arrow: (
+        clock: (
             <>
-                <path d="M5 12h14" />
-                <path d="m13 6 6 6-6 6" />
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M12 7v5l3 2" />
+            </>
+        ),
+        attempts: (
+            <>
+                <circle cx="9" cy="8" r="3" />
+                <path d="M3 20c.5-3.5 2.5-5 6-5s5.5 1.5 6 5" />
+                <path d="M16 5.5a3 3 0 0 1 0 5.5M18 15c1.7.7 2.7 2 3 4" />
             </>
         ),
     }
 
-    return <svg {...common}>{icons[name]}</svg>
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+        >
+            {icons[name]}
+        </svg>
+    )
 }
 
-function StatusBadge({ status }) {
+function getStatusClasses(status) {
     const styles = {
         DRAFT:
             "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
         SCHEDULED:
-            "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400",
+            "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
         ACTIVE:
-            "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+            "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400",
         CLOSED:
-            "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400",
+            "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
         EVALUATED:
-            "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
+            "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400",
     }
 
-    const labels = {
-        DRAFT: "Draft",
-        SCHEDULED: "Scheduled",
-        ACTIVE: "Active",
-        CLOSED: "Closed",
-        EVALUATED: "Evaluated",
+    return styles[status] || styles.DRAFT
+}
+
+function formatStatus(status) {
+    if (!status) {
+        return "Draft"
     }
 
     return (
-        <span
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${
-                styles[status] || styles.DRAFT
-            }`}
-        >
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-
-            {labels[status] || "Draft"}
-        </span>
+        status.charAt(0) +
+        status.slice(1).toLowerCase()
     )
 }
 
@@ -100,299 +99,35 @@ function formatDate(value) {
     }
 
     return date.toLocaleString([], {
-        dateStyle: "medium",
-        timeStyle: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
     })
 }
 
-export default function QuizDetailCard({
-    quiz,
-    questions,
-    totalMarks,
-    loading,
-    onContinue,
-}) {
-    if (!quiz) {
-        return (
-            <section className="flex min-h-[420px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-[#383838] dark:bg-[#1f1f1f]">
-                <div>
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-[#292929]">
-                        <Icon
-                            name="book"
-                            className="h-6 w-6"
-                        />
-                    </div>
-
-                    <p className="mt-4 text-sm font-bold text-slate-700 dark:text-slate-200">
-                        Select a quiz
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                        Select any quiz to view its details.
-                    </p>
-                </div>
-            </section>
-        )
-    }
-
+function InfoMetric({ icon, label, value }) {
     return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-[#303030] dark:bg-[#1f1f1f]">
-
-            {/* Header */}
-            <div className="border-b border-slate-200 p-5 dark:border-[#303030] sm:p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                            <Icon
-                                name="book"
-                                className="h-3.5 w-3.5"
-                            />
-
-                            {quiz.subject || "Assessment"}
-                        </div>
-
-                        <h2 className="text-lg font-bold leading-snug text-slate-900 dark:text-white sm:text-xl">
-                            {quiz.title}
-                        </h2>
-
-                        {quiz.description && (
-                            <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                                {quiz.description}
-                            </p>
-                        )}
-                    </div>
-
-                    <StatusBadge status={quiz.status} />
-                </div>
+        <div className="min-w-0 px-3 py-3.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+                <Icon name={icon} className="h-3.5 w-3.5" />
+                <span>{label}</span>
             </div>
 
-            {/* Main stats */}
-            <div className="grid grid-cols-2 border-b border-slate-200 dark:border-[#303030] sm:grid-cols-4">
-                <Stat
-                    icon="question"
-                    label="Questions"
-                    value={questions.length}
-                />
-
-                <Stat
-                    icon="book"
-                    label="Total Marks"
-                    value={totalMarks}
-                />
-
-                <Stat
-                    icon="clock"
-                    label="Duration"
-                    value={`${quiz.duration_minutes} min`}
-                />
-
-                <Stat
-                    icon="users"
-                    label="Max Attempts"
-                    value={quiz.max_attempts}
-                />
-            </div>
-
-            <div className="p-5 sm:p-6">
-
-                {/* Schedule */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <InfoBox
-                        icon="calendar"
-                        label="Starts"
-                        value={formatDate(
-                            quiz.starts_at
-                        )}
-                    />
-
-                    <InfoBox
-                        icon="calendar"
-                        label="Ends"
-                        value={formatDate(
-                            quiz.ends_at
-                        )}
-                    />
-                </div>
-
-                {/* Settings */}
-                <div className="mt-6">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                        Quiz Settings
-                    </p>
-
-                    <div className="flex flex-wrap gap-2">
-                        {quiz.review_enabled && (
-                            <SettingBadge>
-                                Review enabled
-                            </SettingBadge>
-                        )}
-
-                        {quiz.shuffle_questions && (
-                            <SettingBadge>
-                                Questions shuffled
-                            </SettingBadge>
-                        )}
-
-                        {quiz.shuffle_options && (
-                            <SettingBadge>
-                                Options shuffled
-                            </SettingBadge>
-                        )}
-
-                        {!quiz.review_enabled &&
-                            !quiz.shuffle_questions &&
-                            !quiz.shuffle_options && (
-                                <span className="text-[11px] text-slate-400">
-                                    Default settings
-                                </span>
-                            )}
-                    </div>
-                </div>
-
-                {/* Questions */}
-                <div className="mt-6">
-                    <div className="mb-3 flex items-end justify-between gap-3">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                                Question Composition
-                            </p>
-
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                Questions currently attached to this quiz.
-                            </p>
-                        </div>
-
-                        <span className="shrink-0 text-[10px] font-semibold text-slate-400">
-                            {questions.length} total
-                        </span>
-                    </div>
-
-                    {loading ? (
-                        <div className="space-y-2">
-                            {[1, 2, 3].map(
-                                (item) => (
-                                    <div
-                                        key={item}
-                                        className="h-14 animate-pulse rounded-lg bg-slate-100 dark:bg-[#292929]"
-                                    />
-                                )
-                            )}
-                        </div>
-                    ) : questions.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center dark:border-[#383838]">
-                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                                No questions added
-                            </p>
-
-                            <p className="mt-1 text-[11px] text-slate-400">
-                                Continue setup to add questions from the Question Bank.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
-                            {questions.map(
-                                (item, index) => {
-                                    const question =
-                                        item.question
-
-                                    return (
-                                        <div
-                                            key={
-                                                item.id
-                                            }
-                                            className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-3 dark:bg-[#242424]"
-                                        >
-                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-[10px] font-bold text-slate-500 dark:border-[#383838] dark:bg-[#303030]">
-                                                {item.order ??
-                                                    index +
-                                                        1}
-                                            </span>
-
-                                            <div className="min-w-0 flex-1">
-                                                <p className="line-clamp-2 text-xs font-medium leading-relaxed text-slate-700 dark:text-slate-200">
-                                                    {question?.text ||
-                                                        "Question unavailable"}
-                                                </p>
-
-                                                {question && (
-                                                    <p className="mt-1 text-[10px] text-slate-400">
-                                                        {
-                                                            question.question_type
-                                                        }
-                                                        {" · "}
-                                                        {
-                                                            question.difficulty
-                                                        }
-                                                        {" · "}
-                                                        {item.marks_override ??
-                                                            question.marks}{" "}
-                                                        marks
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Action */}
-                {quiz.status === "DRAFT" && (
-                    <div className="mt-6 border-t border-slate-200 pt-5 dark:border-[#303030]">
-                        <button
-                            type="button"
-                            onClick={onContinue}
-                            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-xs font-bold text-white transition-all hover:bg-blue-700 active:scale-[0.99] dark:hover:bg-blue-500"
-                        >
-                            Continue Quiz Setup
-
-                            <Icon
-                                name="arrow"
-                                className="h-4 w-4"
-                            />
-                        </button>
-                    </div>
-                )}
-            </div>
-        </section>
-    )
-}
-
-function Stat({ icon, label, value }) {
-    return (
-        <div className="border-r border-slate-200 p-4 last:border-r-0 dark:border-[#303030]">
-            <div className="flex items-center gap-2 text-slate-400">
-                <Icon
-                    name={icon}
-                    className="h-4 w-4"
-                />
-
-                <span className="text-[10px] font-semibold">
-                    {label}
-                </span>
-            </div>
-
-            <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+            <p className="mt-2 truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">
                 {value}
             </p>
         </div>
     )
 }
 
-function InfoBox({ icon, label, value }) {
+function ScheduleBox({ label, value }) {
     return (
-        <div className="rounded-lg bg-slate-50 p-3.5 dark:bg-[#242424]">
-            <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
-                <Icon
-                    name={icon}
-                    className="h-4 w-4"
-                />
-
-                <span className="text-[10px] font-semibold uppercase tracking-wide">
-                    {label}
-                </span>
+        <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                <Icon name="calendar" className="h-3.5 w-3.5" />
+                {label}
             </div>
 
             <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
@@ -402,10 +137,363 @@ function InfoBox({ icon, label, value }) {
     )
 }
 
-function SettingBadge({ children }) {
+function SettingPill({ label, enabled }) {
     return (
-        <span className="rounded-md bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:bg-[#292929] dark:text-slate-300">
-            {children}
+        <span
+            className={[
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold",
+                enabled
+                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+            ].join(" ")}
+        >
+            <span
+                className={[
+                    "h-1.5 w-1.5 rounded-full",
+                    enabled
+                        ? "bg-emerald-500"
+                        : "bg-slate-400",
+                ].join(" ")}
+            />
+
+            {label}
         </span>
+    )
+}
+
+function getQuestionTitle(question) {
+    if (!question) {
+        return "Question"
+    }
+
+    if (typeof question === "object") {
+        return (
+            question.title ||
+            question.text ||
+            "Untitled question"
+        )
+    }
+
+    return "Question"
+}
+
+function getQuestionType(question) {
+    if (!question || typeof question !== "object") {
+        return "Question"
+    }
+
+    return question.question_type || question.type || "Question"
+}
+
+function getQuestionDifficulty(question) {
+    if (!question || typeof question !== "object") {
+        return "—"
+    }
+
+    return question.difficulty || "—"
+}
+
+function getQuestionMarks(questionLink) {
+    if (!questionLink) {
+        return "—"
+    }
+
+    if (questionLink.marks_override) {
+        return questionLink.marks_override
+    }
+
+    if (
+        typeof questionLink.question === "object" &&
+        questionLink.question?.marks
+    ) {
+        return questionLink.question.marks
+    }
+
+    return "—"
+}
+
+export default function QuizDetailCard({
+    quiz,
+    questionCount = 0,
+    totalMarks = null,
+    questionLinks = [],
+    onEdit,
+    onQuestions,
+    onResults,
+}) {
+    if (!quiz) {
+        return (
+            <div className="flex h-full min-h-0 items-center justify-center rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#141518]">
+                <div className="max-w-xs px-6 text-center">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+                        <Icon
+                            name="quiz"
+                            className="h-5 w-5 text-slate-400"
+                        />
+                    </div>
+
+                    <h3 className="text-sm font-bold">
+                        Select a quiz
+                    </h3>
+
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                        Select a quiz from the left to see its complete
+                        overview here.
+                    </p>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#141518]">
+            {/* =========================================================
+                HEADER
+            ========================================================== */}
+            <div className="shrink-0 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <div className="mb-2 flex items-center gap-2">
+                            <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-500">
+                                {quiz.subject || "General"}
+                            </span>
+
+                            <span
+                                className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold ${getStatusClasses(
+                                    quiz.status
+                                )}`}
+                            >
+                                ● {formatStatus(quiz.status)}
+                            </span>
+                        </div>
+
+                        <h2 className="truncate text-xl font-bold tracking-tight text-slate-950 dark:text-white">
+                            {quiz.title || "Untitled Quiz"}
+                        </h2>
+
+                        <p className="mt-1 truncate text-xs text-slate-400">
+                            {quiz.description ||
+                                "No description provided"}
+                        </p>
+                    </div>
+
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500 dark:bg-blue-500/10">
+                        <Icon
+                            name="quiz"
+                            className="h-4 w-4"
+                        />
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                    <button
+                        type="button"
+                        onClick={() => onQuestions?.(quiz.id)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                        <Icon
+                            name="questions"
+                            className="h-3.5 w-3.5"
+                        />
+                        Questions
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => onEdit?.(quiz.id)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                        <Icon
+                            name="edit"
+                            className="h-3.5 w-3.5"
+                        />
+                        Edit
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => onResults?.(quiz.id)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-xs font-semibold text-white transition hover:bg-blue-700"
+                    >
+                        <Icon
+                            name="results"
+                            className="h-3.5 w-3.5"
+                        />
+                        Results
+                    </button>
+                </div>
+            </div>
+
+            {/* =========================================================
+                METRICS
+
+                Fixed-size compact block. No scroll.
+            ========================================================== */}
+            <div className="grid shrink-0 grid-cols-4 divide-x border-b border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                <InfoMetric
+                    icon="questions"
+                    label="Questions"
+                    value={questionCount}
+                />
+
+                <InfoMetric
+                    icon="marks"
+                    label="Total Marks"
+                    value={totalMarks ?? "—"}
+                />
+
+                <InfoMetric
+                    icon="clock"
+                    label="Duration"
+                    value={`${quiz.duration_minutes || 0} min`}
+                />
+
+                <InfoMetric
+                    icon="attempts"
+                    label="Max Attempts"
+                    value={quiz.max_attempts || 1}
+                />
+            </div>
+
+            {/* =========================================================
+                BODY
+
+                Deliberately compact.
+                No overflow-y-auto.
+            ========================================================== */}
+            <div className="min-h-0 flex-1 px-5 py-4">
+                {/* Schedule */}
+                <div className="grid grid-cols-2 gap-3">
+                    <ScheduleBox
+                        label="Starts"
+                        value={formatDate(quiz.starts_at)}
+                    />
+
+                    <ScheduleBox
+                        label="Ends"
+                        value={formatDate(quiz.ends_at)}
+                    />
+                </div>
+
+                {/* Settings */}
+                <div className="mt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                        Quiz Settings
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <SettingPill
+                            label="Review enabled"
+                            enabled={Boolean(
+                                quiz.review_enabled
+                            )}
+                        />
+
+                        <SettingPill
+                            label="Shuffle questions"
+                            enabled={Boolean(
+                                quiz.shuffle_questions
+                            )}
+                        />
+
+                        <SettingPill
+                            label="Shuffle options"
+                            enabled={Boolean(
+                                quiz.shuffle_options
+                            )}
+                        />
+                    </div>
+                </div>
+
+                {/* Question composition */}
+                <div className="mt-4">
+                    <div className="flex items-end justify-between">
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                                Question Composition
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-400">
+                                Questions currently attached to this
+                                quiz.
+                            </p>
+                        </div>
+
+                        <span className="text-[10px] font-semibold text-slate-400">
+                            {questionCount} total
+                        </span>
+                    </div>
+
+                    <div className="mt-2 space-y-2">
+                        {questionLinks
+                            .slice(0, 4)
+                            .map((item, index) => {
+                                const question =
+                                    typeof item.question ===
+                                    "object"
+                                        ? item.question
+                                        : null
+
+                                return (
+                                    <div
+                                        key={
+                                            item.id ||
+                                            `${item.question}-${index}`
+                                        }
+                                        className="flex min-w-0 items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-900"
+                                    >
+                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-200 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                            {item.order ??
+                                                index + 1}
+                                        </span>
+
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                                {getQuestionTitle(
+                                                    question
+                                                )}
+                                            </p>
+
+                                            <p className="mt-0.5 truncate text-[10px] text-slate-400">
+                                                {getQuestionType(
+                                                    question
+                                                )}{" "}
+                                                ·{" "}
+                                                {getQuestionDifficulty(
+                                                    question
+                                                )}{" "}
+                                                ·{" "}
+                                                {getQuestionMarks(
+                                                    item
+                                                )}{" "}
+                                                marks
+                                            </p>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+
+                        {questionLinks.length === 0 && (
+                            <div className="rounded-lg bg-slate-50 px-3 py-4 text-xs text-slate-400 dark:bg-slate-900">
+                                No questions attached yet.
+                            </div>
+                        )}
+
+                        {questionLinks.length > 4 && (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    onQuestions?.(quiz.id)
+                                }
+                                className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-[11px] font-semibold text-blue-500 transition hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-blue-500/5"
+                            >
+                                View all {questionLinks.length} questions
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
     )
 }

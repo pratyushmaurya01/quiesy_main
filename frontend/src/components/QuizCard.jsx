@@ -1,19 +1,9 @@
-function Icon({ name, className = "w-4 h-4" }) {
-    const common = {
-        className,
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "1.8",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        viewBox: "0 0 24 24",
-    }
-
+function Icon({ name, className = "h-4 w-4" }) {
     const icons = {
-        book: (
+        quiz: (
             <>
-                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
-                <path d="M8 7h8M8 11h7M8 15h4" />
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+                <path d="M8 8h8M8 12h8M8 16h5" />
             </>
         ),
         clock: (
@@ -22,160 +12,198 @@ function Icon({ name, className = "w-4 h-4" }) {
                 <path d="M12 7v5l3 2" />
             </>
         ),
-        arrow: (
+        questions: (
             <>
-                <path d="M5 12h14" />
-                <path d="m13 6 6 6-6 6" />
+                <path d="M5 5h14v14H5z" />
+                <path d="M9 9h6M9 13h6M9 17h3" />
             </>
+        ),
+        marks: (
+            <>
+                <path d="M7 4h10v16H7z" />
+                <path d="M9.5 8h5M9.5 12h5M9.5 16h3" />
+            </>
+        ),
+        arrow: (
+            <path d="M5 12h14M13 6l6 6-6 6" />
         ),
     }
 
-    return <svg {...common}>{icons[name]}</svg>
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+        >
+            {icons[name]}
+        </svg>
+    )
 }
 
-function StatusBadge({ status }) {
+function getStatusClasses(status) {
     const styles = {
         DRAFT:
             "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
         SCHEDULED:
-            "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400",
+            "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
         ACTIVE:
-            "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+            "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400",
         CLOSED:
-            "bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400",
+            "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
         EVALUATED:
-            "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400",
+            "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400",
     }
 
-    const labels = {
-        DRAFT: "Draft",
-        SCHEDULED: "Scheduled",
-        ACTIVE: "Active",
-        CLOSED: "Closed",
-        EVALUATED: "Evaluated",
-    }
+    return styles[status] || styles.DRAFT
+}
 
-    const statusStyle =
-        styles[status] || styles.DRAFT
+function formatStatus(status) {
+    if (!status) {
+        return "Draft"
+    }
 
     return (
-        <span
-            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold ${statusStyle}`}
-        >
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {labels[status] || "Draft"}
-        </span>
+        status.charAt(0) +
+        status.slice(1).toLowerCase()
     )
 }
 
-function formatSchedule(value) {
-    if (!value) {
-        return "No schedule"
+function formatSchedule(quiz) {
+    if (quiz.starts_at) {
+        const date = new Date(quiz.starts_at)
+
+        if (!Number.isNaN(date.getTime())) {
+            return `Starts ${date.toLocaleDateString([], {
+                day: "numeric",
+                month: "short",
+            })}`
+        }
     }
 
-    const date = new Date(value)
+    if (quiz.ends_at) {
+        const date = new Date(quiz.ends_at)
 
-    if (Number.isNaN(date.getTime())) {
-        return "No schedule"
+        if (!Number.isNaN(date.getTime())) {
+            return `Ends ${date.toLocaleDateString([], {
+                day: "numeric",
+                month: "short",
+            })}`
+        }
     }
 
-    return date.toLocaleString([], {
-        dateStyle: "medium",
-        timeStyle: "short",
-    })
+    return "No schedule"
 }
 
 export default function QuizCard({
     quiz,
-    questionCount,
-    totalMarks,
-    selected,
-    onClick,
+    selected = false,
+    questionCount = 0,
+    totalMarks = null,
+    onSelect,
 }) {
     return (
         <button
             type="button"
-            onClick={onClick}
-            className={`
-                group w-full text-left rounded-xl border p-4
-                transition-all duration-200
-                focus:outline-none focus:ring-2
-                focus:ring-blue-500/30
-                ${
-                    selected
-                        ? "border-blue-500 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-950/10"
-                        : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-300 dark:border-[#303030] dark:bg-[#1f1f1f] dark:hover:border-blue-800"
-                }
-            `}
+            onClick={onSelect}
+            className={[
+                "group relative flex min-h-[178px] w-full flex-col rounded-xl border p-4 text-left transition-all duration-150",
+                "bg-white dark:bg-[#181a1e]",
+                selected
+                    ? "border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
+                    : "border-slate-200 hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-slate-700",
+            ].join(" ")}
         >
+            {/* Selected indicator */}
+            <span
+                className={[
+                    "absolute left-0 top-5 h-7 w-0.5 rounded-r-full transition-opacity",
+                    selected ? "bg-blue-500 opacity-100" : "opacity-0",
+                ].join(" ")}
+            />
+
+            {/* Top row */}
             <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex items-center gap-2">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-blue-600 dark:bg-[#292929] dark:text-blue-400">
-                            <Icon
-                                name="book"
-                                className="h-3.5 w-3.5"
-                            />
-                        </span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-blue-500 dark:bg-slate-800">
+                        <Icon
+                            name="quiz"
+                            className="h-3.5 w-3.5"
+                        />
+                    </span>
 
-                        <span className="truncate text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                            {quiz.subject || "No subject"}
-                        </span>
-                    </div>
-
-                    <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900 dark:text-white">
-                        {quiz.title}
-                    </h3>
+                    <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        {quiz.subject || "General"}
+                    </span>
                 </div>
 
-                <StatusBadge status={quiz.status} />
+                <span
+                    className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold ${getStatusClasses(
+                        quiz.status
+                    )}`}
+                >
+                    <span className="mr-1">●</span>
+                    {formatStatus(quiz.status)}
+                </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 dark:border-[#303030]">
-                <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            {/* Title */}
+            <div className="mt-3 min-w-0">
+                <h3 className="line-clamp-2 text-[15px] font-bold leading-5 tracking-tight text-slate-900 dark:text-white">
+                    {quiz.title || "Untitled Quiz"}
+                </h3>
+            </div>
+
+            {/* Metrics */}
+            <div className="mt-4 grid grid-cols-3 border-y border-slate-200 py-3 dark:border-slate-800">
+                <div className="min-w-0">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                         Questions
                     </p>
 
-                    <p className="mt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
                         {questionCount}
                     </p>
                 </div>
 
-                <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <div className="border-l border-slate-200 pl-3 dark:border-slate-800">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                         Marks
                     </p>
 
-                    <p className="mt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {totalMarks}
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                        {totalMarks ?? "—"}
                     </p>
                 </div>
 
-                <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <div className="border-l border-slate-200 pl-3 dark:border-slate-800">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                         Duration
                     </p>
 
-                    <p className="mt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {quiz.duration_minutes}m
+                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                        {quiz.duration_minutes || 0}m
                     </p>
                 </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+            {/* Bottom */}
+            <div className="mt-auto flex items-center justify-between pt-3">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-slate-400">
                     <Icon
                         name="clock"
-                        className="h-3.5 w-3.5 shrink-0"
+                        className="h-3 w-3 shrink-0"
                     />
 
                     <span className="truncate">
-                        {formatSchedule(quiz.starts_at)}
+                        {formatSchedule(quiz)}
                     </span>
-                </div>
+                </span>
 
-                <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-blue-500 transition group-hover:gap-1.5">
                     {quiz.status === "DRAFT"
                         ? "Continue"
                         : "View"}
@@ -188,4 +216,4 @@ export default function QuizCard({
             </div>
         </button>
     )
-} 
+}
