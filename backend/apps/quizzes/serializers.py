@@ -207,6 +207,10 @@ class QuestionVersionSerializer(serializers.ModelSerializer):
 
 
 class QuizQuestionSerializer(serializers.ModelSerializer):
+    quiz = serializers.PrimaryKeyRelatedField(
+        read_only=True
+    )
+
     question = serializers.PrimaryKeyRelatedField(
         queryset=Question.objects.filter(is_active=True)
     )
@@ -215,6 +219,7 @@ class QuizQuestionSerializer(serializers.ModelSerializer):
         model = QuizQuestion
         fields = [
             "id",
+            "quiz",
             "question",
             "order",
             "marks_override",
@@ -222,6 +227,7 @@ class QuizQuestionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "quiz",
             "created_at",
         ]
 
@@ -234,7 +240,12 @@ class QuizQuestionSerializer(serializers.ModelSerializer):
             question=question,
         ).exists():
             raise serializers.ValidationError(
-                {"question": "This question is already added to the quiz."}
+                {
+                    "question": (
+                        "This question is already added "
+                        "to the quiz."
+                    )
+                }
             )
 
         return attrs
