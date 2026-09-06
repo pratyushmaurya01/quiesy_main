@@ -95,17 +95,6 @@ function getQuizId(value) {
     return value
 }
 
-function getQuestionId(value) {
-    if (value === null || value === undefined) {
-        return null
-    }
-
-    if (typeof value === "object") {
-        return value.id ?? null
-    }
-
-    return value
-}
 
 function getQuestionCount(quizId, quizQuestions) {
     return quizQuestions.filter(
@@ -153,21 +142,13 @@ export default function TeacherDashboard() {
             setLoading(true)
             setError("")
 
-            const [quizResponse, questionResponse] = await Promise.all([
-                getQuizzes(),
-                getQuizQuestions(),
-            ])
+            const quizResponse = await getQuizzes()
 
             const quizData = Array.isArray(quizResponse.data)
                 ? quizResponse.data
                 : quizResponse.data?.results || []
 
-            const questionData = Array.isArray(questionResponse.data)
-                ? questionResponse.data
-                : questionResponse.data?.results || []
-
             setQuizzes(quizData)
-            setQuizQuestions(questionData)
 
             setSelectedQuizId((currentId) => {
                 if (
@@ -188,10 +169,33 @@ export default function TeacherDashboard() {
             setLoading(false)
         }
     }
-
     useEffect(() => {
         loadDashboard()
     }, [])
+
+    useEffect(() => {
+        const loadQuestions = async () => {
+            if (!selectedQuizId) {
+                setQuizQuestions([])
+                return
+            }
+
+            try {
+                const response = await getQuizQuestions(selectedQuizId)
+
+                const questionData = Array.isArray(response.data)
+                    ? response.data
+                    : response.data?.results || []
+
+                setQuizQuestions(questionData)
+            } catch (err) {
+                console.error("Failed to load quiz questions:", err)
+                setQuizQuestions([])
+            }
+        }
+
+        loadQuestions()
+    }, [selectedQuizId])
 
     const selectedQuiz = useMemo(() => {
         return (
