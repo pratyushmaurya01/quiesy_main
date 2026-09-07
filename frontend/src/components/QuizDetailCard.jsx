@@ -362,7 +362,7 @@ export default function QuizDetailCard({
                 Deliberately compact.
                 No overflow-y-auto.
             ========================================================== */}
-            <div className="min-h-0 flex-1 px-5 py-4">
+            <div className="quiz-detail-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
                 {/* Schedule */}
                 <div className="grid grid-cols-2 gap-3">
                     <ScheduleBox
@@ -494,6 +494,26 @@ export default function QuizDetailCard({
                     </div>
                 </div>
             </div>
+
+            <style>{`
+                .quiz-detail-scrollbar {
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+                }
+
+                .quiz-detail-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+
+                .quiz-detail-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+
+                .quiz-detail-scrollbar::-webkit-scrollbar-thumb {
+                    background: rgba(148, 163, 184, 0.5);
+                    border-radius: 9999px;
+                }
+            `}</style>
         </div>
     )
 }

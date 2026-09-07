@@ -6,6 +6,7 @@ import QuizCard from "../../components/QuizCard"
 import QuizDetailCard from "../../components/QuizDetailCard"
 
 import {
+    getQuestion,
     getQuizzes,
     getQuizQuestions,
 } from "../../api/quizzes"
@@ -128,6 +129,7 @@ export default function TeacherDashboard() {
 
     const [quizzes, setQuizzes] = useState([])
     const [quizQuestions, setQuizQuestions] = useState([])
+    const [questionDetailsById, setQuestionDetailsById] = useState({})
 
     const [selectedQuizId, setSelectedQuizId] = useState(null)
 
@@ -150,6 +152,8 @@ export default function TeacherDashboard() {
 
             setQuizzes(quizData)
 
+            const firstQuizId = quizData[0]?.id ?? null
+
             setSelectedQuizId((currentId) => {
                 if (
                     currentId &&
@@ -160,28 +164,44 @@ export default function TeacherDashboard() {
                     return currentId
                 }
 
-                return quizData[0]?.id ?? null
+                return firstQuizId
             })
+
+            if (firstQuizId) {
+                const questionResponse =
+                    await getQuizQuestions(firstQuizId)
+
+                const questionData = Array.isArray(questionResponse.data)
+                    ? questionResponse.data
+                    : questionResponse.data?.results || []
+
+                setQuizQuestions(questionData)
+            } else {
+                setQuizQuestions([])
+            }
         } catch (err) {
             console.error("Failed to load teacher dashboard:", err)
             setError("Unable to load your quizzes.")
+            setQuizQuestions([])
         } finally {
             setLoading(false)
         }
     }
+
     useEffect(() => {
         loadDashboard()
     }, [])
 
     useEffect(() => {
-        const loadQuestions = async () => {
+        const loadSelectedQuizQuestions = async () => {
             if (!selectedQuizId) {
                 setQuizQuestions([])
                 return
             }
 
             try {
-                const response = await getQuizQuestions(selectedQuizId)
+                const response =
+                    await getQuizQuestions(selectedQuizId)
 
                 const questionData = Array.isArray(response.data)
                     ? response.data
@@ -189,12 +209,15 @@ export default function TeacherDashboard() {
 
                 setQuizQuestions(questionData)
             } catch (err) {
-                console.error("Failed to load quiz questions:", err)
+                console.error(
+                    "Failed to load selected quiz questions:",
+                    err
+                )
                 setQuizQuestions([])
             }
         }
 
-        loadQuestions()
+        loadSelectedQuizQuestions()
     }, [selectedQuizId])
 
     const selectedQuiz = useMemo(() => {
@@ -248,6 +271,75 @@ export default function TeacherDashboard() {
                 Number(selectedQuiz.id)
         )
     }, [quizQuestions, selectedQuiz])
+
+    useEffect(() => {
+        const questionIds = [
+            ...new Set(
+                selectedQuestionLinks
+                    .slice(0, 4)
+                    .map((item) =>
+                        typeof item.question === "object"
+                            ? null
+                            : item.question
+                    )
+                    .filter(
+                        (questionId) =>
+                            questionId !== null &&
+                            questionId !== undefined &&
+                            !questionDetailsById[questionId]
+                    )
+            ),
+        ]
+
+        if (questionIds.length === 0) {
+            return undefined
+        }
+
+        let cancelled = false
+
+        const loadQuestionDetails = async () => {
+            const results = await Promise.allSettled(
+                questionIds.map((questionId) =>
+                    getQuestion(questionId)
+                )
+            )
+
+            if (cancelled) {
+                return
+            }
+
+            setQuestionDetailsById((currentDetails) => {
+                const nextDetails = { ...currentDetails }
+
+                results.forEach((result, index) => {
+                    if (result.status === "fulfilled") {
+                        nextDetails[questionIds[index]] =
+                            result.value.data
+                    }
+                })
+
+                return nextDetails
+            })
+        }
+
+        loadQuestionDetails()
+
+        return () => {
+            cancelled = true
+        }
+    }, [selectedQuestionLinks, questionDetailsById])
+
+    const detailedSelectedQuestionLinks = useMemo(() => {
+        return selectedQuestionLinks.map((item) => {
+            if (typeof item.question === "object") {
+                return item
+            }
+
+            const question = questionDetailsById[item.question]
+
+            return question ? { ...item, question } : item
+        })
+    }, [selectedQuestionLinks, questionDetailsById])
 
     return (
         <TeacherShell>
@@ -532,7 +624,7 @@ export default function TeacherDashboard() {
                                             : null
                                     }
                                     questionLinks={
-                                        selectedQuestionLinks
+                                        detailedSelectedQuestionLinks
                                     }
                                     onEdit={(quizId) =>
                                         navigate(
@@ -574,7 +666,7 @@ export default function TeacherDashboard() {
                                 selectedQuiz.id,
                                 quizQuestions
                             )}
-                            questionLinks={selectedQuestionLinks}
+                            questionLinks={detailedSelectedQuestionLinks}
                             onEdit={(quizId) =>
                                 navigate(`/edit-quiz/${quizId}`)
                             }

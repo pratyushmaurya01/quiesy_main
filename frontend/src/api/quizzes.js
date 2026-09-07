@@ -35,11 +35,23 @@ export const getQuiz = (id) => {
 }
 
 export const getQuizzes = () => {
-    return API.get("teacher-quizzes/")
+    return API.get("quizzes/quizzes/")
 }
 
-export const getQuizQuestions = (quizId) => {
-    return API.get(`quiz/${quizId}/questions-list/`)
+export const getQuizQuestions = () => {
+    return API.get("quizzes/quiz-questions/")
+}
+
+export const addQuestionToQuiz = (data) => {
+    return API.post("quizzes/quiz-questions/", data)
+}
+
+export const removeQuestionFromQuiz = (quizQuestionId) => {
+    return API.delete(`quizzes/quiz-questions/${quizQuestionId}/`)
+}
+
+export const updateQuizQuestion = (quizQuestionId, data) => {
+    return API.patch(`quizzes/quiz-questions/${quizQuestionId}/`, data)
 }
 
 export const getQuizQuestionsByCode = (quizCode) => {
