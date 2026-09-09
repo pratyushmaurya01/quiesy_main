@@ -2,7 +2,12 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 import uuid
+import secrets
+import string
 
+from django.conf import settings
+from django.core.validators import MinValueValidator
+from django.db import models
 
 class Question(models.Model):
     class QuestionType(models.TextChoices):
@@ -138,6 +143,12 @@ class QuestionVersion(models.Model):
 
 
 class Quiz(models.Model):
+    def generate_quiz_code():
+        alphabet = string.ascii_uppercase + string.digits
+        while True:
+            code = ''.join(secrets.choice(alphabet) for _ in range(6))
+            if not Quiz.objects.filter(quiz_code=code).exists():
+                return code
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
         SCHEDULED = "SCHEDULED", "Scheduled"
@@ -157,10 +168,11 @@ class Quiz(models.Model):
 
     description = models.TextField(blank=True)
 
-    quiz_code = models.UUIDField(
-        default=uuid.uuid4,
+    quiz_code = models.CharField(
+        max_length=6,
         unique=True,
         editable=False,
+        default=generate_quiz_code,
     )
 
     status = models.CharField(

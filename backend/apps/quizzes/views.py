@@ -429,5 +429,3 @@ class QuizQuestionViewSet(viewsets.ModelViewSet):
             quiz=quiz_question.quiz,
             question=quiz_question.question,
         )
-
-
