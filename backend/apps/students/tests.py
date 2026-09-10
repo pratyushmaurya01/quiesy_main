@@ -1,406 +1,630 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import make_password
-from django.test import TestCase
+from django.utils import timezone
 
-from rest_framework.test import APIClient
+from rest_framework.test import APITestCase
 
-from apps.quizzes.models import Quiz
+from apps.quizzes.models import (
+    Option,
+    Question,
+    Quiz,
+    QuizQuestion,
+)
+
+from .models import Answer, ExamAttempt
 
 
 User = get_user_model()
 
 
-class JoinQuizTests(TestCase):
+class StudentExamFlowTests(APITestCase):
 
     def setUp(self):
-        self.client = APIClient()
-
         self.student = User.objects.create_user(
             email="student@test.com",
-            password="Student@123",
             name="Test Student",
+            password="Password123!",
             role="STUDENT",
         )
 
         self.teacher = User.objects.create_user(
             email="teacher@test.com",
-            password="Teacher@123",
             name="Test Teacher",
+            password="Password123!",
             role="TEACHER",
         )
 
-        self.password_quiz = Quiz.objects.create(
+        self.quiz = Quiz.objects.create(
             teacher=self.teacher,
-            title="Python Quiz",
+            title="Test Quiz",
             subject="Python",
-            description="Test quiz",
-            status="DRAFT",
+            description="Exam test",
             duration_minutes=30,
-            max_attempts=1,
-            password=make_password("123456"),
-        )
-
-        self.no_password_quiz = Quiz.objects.create(
-            teacher=self.teacher,
-            title="Open Python Quiz",
-            subject="Python",
-            description="Quiz without password",
-            status="DRAFT",
-            duration_minutes=30,
-            max_attempts=1,
-            password="",
-        )
-
-    def test_student_can_join_quiz_without_password(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": self.no_password_quiz.quiz_code,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.data["message"],
-            "Quiz joined successfully.",
-        )
-
-    def test_student_can_join_with_correct_password(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": self.password_quiz.quiz_code,
-                "password": "123456",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-
-    def test_student_cannot_join_with_wrong_password(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": self.password_quiz.quiz_code,
-                "password": "wrong",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_password_required_for_protected_quiz(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": self.password_quiz.quiz_code,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_invalid_quiz_code(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": "WRONG1",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_missing_quiz_code(self):
-        self.client.force_authenticate(user=self.student)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {},
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-
-    def test_unauthenticated_user_cannot_join(self):
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": "WRONG1",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 401)
-
-    def test_teacher_cannot_join_quiz(self):
-        self.client.force_authenticate(user=self.teacher)
-
-        response = self.client.post(
-            "/api/v1/student/join-quiz/",
-            {
-                "quiz_code": self.password_quiz.quiz_code,
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 403)
-
-
-class QuizDiscoveryTests(TestCase):
-
-    def setUp(self):
-        self.client = APIClient()
-
-        self.student = User.objects.create_user(
-            email="student@test.com",
-            password="Student@123",
-            name="Test Student",
-            role="STUDENT",
-        )
-
-        self.teacher = User.objects.create_user(
-            email="teacher@test.com",
-            password="Teacher@123",
-            name="Test Teacher",
-            role="TEACHER",
-        )
-
-    def create_quiz(
-        self,
-        title,
-        subject,
-        description="Test quiz",
-        status="ACTIVE",
-        password="",
-    ):
-        return Quiz.objects.create(
-            teacher=self.teacher,
-            title=title,
-            subject=subject,
-            description=description,
-            status=status,
-            duration_minutes=30,
-            max_attempts=1,
-            password=password,
-        )
-
-    def test_student_can_discover_quizzes(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="DSA Quiz",
-            subject="Data Structures",
-            description="Arrays and strings",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 1)
-        self.assertEqual(
-            response.data["results"][0]["title"],
-            "DSA Quiz",
-        )
-
-    def test_student_can_search_quiz(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Python Programming",
-            subject="Programming",
-            description="Python basics",
-        )
-
-        self.create_quiz(
-            title="Java Programming",
-            subject="Programming",
-            description="Java basics",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/?search=Python"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 1)
-        self.assertEqual(
-            response.data["results"][0]["title"],
-            "Python Programming",
-        )
-
-    def test_student_can_search_by_subject(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Algorithms Quiz",
-            subject="Data Structures",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/?search=Data"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 1)
-
-    def test_student_can_search_by_teacher_name(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Algorithms Quiz",
-            subject="DSA",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/?search=Test Teacher"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 1)
-
-    def test_draft_quizzes_are_not_discoverable(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Draft Quiz",
-            subject="Python",
-            status="DRAFT",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 0)
-
-    def test_closed_quizzes_are_not_discoverable(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Closed Quiz",
-            subject="Python",
-            status="CLOSED",
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 0)
-
-    def test_quiz_password_is_not_exposed(self):
-        self.client.force_authenticate(user=self.student)
-
-        self.create_quiz(
-            title="Secure Quiz",
-            subject="Python",
-            password=make_password("secret"),
-        )
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn(
-            "password",
-            response.data["results"][0],
-        )
-
-    def test_teacher_cannot_discover_quizzes(self):
-        self.client.force_authenticate(user=self.teacher)
-
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 403)
-
-    def test_unauthenticated_user_cannot_discover_quizzes(self):
-        response = self.client.get(
-            "/api/v1/student/quizzes/"
-        )
-
-        self.assertEqual(response.status_code, 401)
-
-
-class QuizDiscoveryPaginationTests(TestCase):
-    def setUp(self):
-        self.student = User.objects.create_user(
-            email="student-pagination@example.com",
-            password="password123",
-            name="Pagination Student",
-            role="STUDENT",
-        )
-
-        self.teacher = User.objects.create_user(
-            email="teacher-pagination@example.com",
-            password="password123",
-            name="Pagination Teacher",
-            role="TEACHER",
-        )
-
-        self.client = APIClient()
-        self.client.force_authenticate(user=self.student)
-
-    def create_quiz(self, number):
-        return Quiz.objects.create(
-            teacher=self.teacher,
-            title=f"Pagination Quiz {number}",
-            subject="Computer Science",
-            description=f"Description {number}",
+            max_attempts=2,
             status=Quiz.Status.ACTIVE,
-            duration_minutes=30,
-            max_attempts=1,
+            starts_at=(
+                timezone.now()
+                - timedelta(minutes=5)
+            ),
+            ends_at=(
+                timezone.now()
+                + timedelta(hours=1)
+            ),
         )
 
-    def test_discovery_is_paginated(self):
-        for number in range(25):
-            self.create_quiz(number)
+        self.question = Question.objects.create(
+            teacher=self.teacher,
+            title="Addition",
+            text="What is 2 + 2?",
+            question_type=(
+                Question.QuestionType.MCQ
+            ),
+            difficulty=(
+                Question.Difficulty.EASY
+            ),
+            marks=5,
+        )
+
+        self.correct_option = Option.objects.create(
+            question=self.question,
+            text="4",
+            is_correct=True,
+            order=1,
+        )
+
+        Option.objects.create(
+            question=self.question,
+            text="5",
+            is_correct=False,
+            order=2,
+        )
+
+        QuizQuestion.objects.create(
+            quiz=self.quiz,
+            question=self.question,
+            order=1,
+        )
+
+        self.client.force_authenticate(
+            user=self.student
+        )
+
+    def start_exam(self):
+        return self.client.post(
+            f"/api/v1/student/"
+            f"quizzes/{self.quiz.id}/start/"
+        )
+
+    def test_student_access(self):
+        response = self.client.get(
+            "/api/v1/student/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+    def test_start_exam(self):
+        response = self.start_exam()
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            ExamAttempt.objects.count(),
+            1,
+        )
+
+        attempt = ExamAttempt.objects.first()
+
+        self.assertEqual(
+            attempt.student,
+            self.student,
+        )
+
+        self.assertEqual(
+            attempt.quiz,
+            self.quiz,
+        )
+
+        self.assertEqual(
+            attempt.status,
+            ExamAttempt.Status.IN_PROGRESS,
+        )
+
+    def test_resume_existing_attempt(self):
+        first = self.start_exam()
+        second = self.start_exam()
+
+        self.assertEqual(
+            first.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            second.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            ExamAttempt.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            first.data["id"],
+            second.data["id"],
+        )
+
+    def test_start_exam_respects_max_attempts(self):
+        first = self.start_exam()
+
+        attempt = ExamAttempt.objects.get(
+            id=first.data["id"]
+        )
+
+        attempt.status = (
+            ExamAttempt.Status.SUBMITTED
+        )
+
+        attempt.submitted_at = timezone.now()
+
+        attempt.save()
+
+        second = self.start_exam()
+
+        self.assertEqual(
+            second.status_code,
+            201,
+        )
+
+        second_attempt = ExamAttempt.objects.exclude(
+            id=attempt.id
+        ).first()
+
+        second_attempt.status = (
+            ExamAttempt.Status.SUBMITTED
+        )
+
+        second_attempt.submitted_at = (
+            timezone.now()
+        )
+
+        second_attempt.save()
+
+        third = self.start_exam()
+
+        self.assertEqual(
+            third.status_code,
+            400,
+        )
+
+    def test_get_attempt(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
 
         response = self.client.get(
-            "/api/v1/student/quizzes/"
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/"
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 25)
-        self.assertEqual(len(response.data["results"]), 20)
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
 
-    def test_discovery_second_page(self):
-        for number in range(25):
-            self.create_quiz(number)
+        self.assertEqual(
+            response.data["id"],
+            attempt_id,
+        )
+
+        self.assertEqual(
+            len(response.data["questions"]),
+            1,
+        )
+
+    def test_save_answer(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        response = self.client.post(
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/",
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": (
+                        self.correct_option.id
+                    )
+                },
+                "sequence": 1,
+                "idempotency_key": "answer-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            Answer.objects.count(),
+            1,
+        )
+
+    def test_update_answer(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        url = (
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/"
+        )
+
+        first = self.client.post(
+            url,
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": 999
+                },
+                "sequence": 1,
+                "idempotency_key": "answer-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            first.status_code,
+            201,
+        )
+
+        second = self.client.post(
+            url,
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": (
+                        self.correct_option.id
+                    )
+                },
+                "sequence": 2,
+                "idempotency_key": "answer-2",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            second.status_code,
+            200,
+        )
+
+        answer = Answer.objects.get(
+            attempt_id=attempt_id,
+            question=self.question,
+        )
+
+        self.assertEqual(
+            answer.sequence,
+            2,
+        )
+
+    def test_stale_sequence_is_ignored(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        url = (
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/"
+        )
+
+        self.client.post(
+            url,
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": 1
+                },
+                "sequence": 5,
+                "idempotency_key": "key-5",
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": 2
+                },
+                "sequence": 3,
+                "idempotency_key": "key-3",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        answer = Answer.objects.get(
+            attempt_id=attempt_id,
+            question=self.question,
+        )
+
+        self.assertEqual(
+            answer.sequence,
+            5,
+        )
+
+    def test_answer_idempotency(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        url = (
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/"
+        )
+
+        payload = {
+            "question": self.question.id,
+            "answer_data": {
+                "option_id": (
+                    self.correct_option.id
+                )
+            },
+            "sequence": 1,
+            "idempotency_key": "same-key",
+        }
+
+        first = self.client.post(
+            url,
+            payload,
+            format="json",
+        )
+
+        second = self.client.post(
+            url,
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(
+            first.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            second.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            Answer.objects.count(),
+            1,
+        )
+
+    def test_get_answers(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        self.client.post(
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/",
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": (
+                        self.correct_option.id
+                    )
+                },
+                "sequence": 1,
+                "idempotency_key": "answer-get",
+            },
+            format="json",
+        )
 
         response = self.client.get(
-            "/api/v1/student/quizzes/?page=2"
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/"
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 25)
-        self.assertEqual(len(response.data["results"]), 5)
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
 
-    def test_discovery_page_size_cannot_be_changed(self):
-        for number in range(25):
-            self.create_quiz(number)
+        self.assertEqual(
+            len(response.data),
+            1,
+        )
+
+    def test_submit_exam_and_evaluate_mcq(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        self.client.post(
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/",
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": (
+                        self.correct_option.id
+                    )
+                },
+                "sequence": 1,
+                "idempotency_key": "answer-submit",
+            },
+            format="json",
+        )
+
+        response = self.client.post(
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/submit/",
+            {
+                "idempotency_key": "submit-1"
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        attempt = ExamAttempt.objects.get(
+            id=attempt_id
+        )
+
+        self.assertEqual(
+            attempt.status,
+            ExamAttempt.Status.SUBMITTED,
+        )
+
+        self.assertEqual(
+            attempt.score,
+            5,
+        )
+
+    def test_duplicate_submit_is_idempotent(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        url = (
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/submit/"
+        )
+
+        first = self.client.post(
+            url,
+            {
+                "idempotency_key": "submit-same"
+            },
+            format="json",
+        )
+
+        second = self.client.post(
+            url,
+            {
+                "idempotency_key": "submit-same"
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            first.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            second.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            ExamAttempt.objects.filter(
+                id=attempt_id,
+                status=(
+                    ExamAttempt.Status.SUBMITTED
+                ),
+            ).count(),
+            1,
+        )
+
+    def test_expired_attempt_cannot_save_answer(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        attempt = ExamAttempt.objects.get(
+            id=attempt_id
+        )
+
+        attempt.expires_at = (
+            timezone.now()
+            - timedelta(seconds=1)
+        )
+
+        attempt.save()
+
+        response = self.client.post(
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/answers/",
+            {
+                "question": self.question.id,
+                "answer_data": {
+                    "option_id": (
+                        self.correct_option.id
+                    )
+                },
+                "sequence": 1,
+                "idempotency_key": "expired",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+        attempt.refresh_from_db()
+
+        self.assertEqual(
+            attempt.status,
+            ExamAttempt.Status.EXPIRED,
+        )
+
+    def test_teacher_cannot_start_exam(self):
+        self.client.force_authenticate(
+            user=self.teacher
+        )
+
+        response = self.start_exam()
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    def test_student_cannot_access_other_attempt(self):
+        response = self.start_exam()
+
+        attempt_id = response.data["id"]
+
+        other_student = User.objects.create_user(
+            email="other@test.com",
+            name="Other Student",
+            password="Password123!",
+            role="STUDENT",
+        )
+
+        self.client.force_authenticate(
+            user=other_student
+        )
 
         response = self.client.get(
-            "/api/v1/student/quizzes/?page=1&page_size=5"
+            f"/api/v1/student/"
+            f"attempts/{attempt_id}/"
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data["results"]), 20)
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
