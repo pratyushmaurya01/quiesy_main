@@ -9,7 +9,6 @@ from .views import (
 
 
 router = DefaultRouter()
-
 router.register(
     r"questions",
     QuestionViewSet,

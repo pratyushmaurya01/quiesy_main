@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import status, viewsets
@@ -91,6 +91,128 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
 
             self._create_version(question)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="schedule",)
+    def schedule(self, request, pk=None):
+        """
+        Schedule a draft quiz.
+
+        Required:
+        - starts_at
+        - ends_at
+        """
+
+        quiz = self.get_object()
+
+        if quiz.status != Quiz.Status.DRAFT:
+            return Response(
+                {
+                    "detail": (
+                        "Only draft quizzes can be scheduled."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        starts_at = request.data.get("starts_at")
+        ends_at = request.data.get("ends_at")
+
+        if not starts_at:
+            return Response(
+                {
+                    "starts_at": "Start time is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not ends_at:
+            return Response(
+                {
+                    "ends_at": "End time is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(
+            quiz,
+            data={
+                "starts_at": starts_at,
+                "ends_at": ends_at,
+            },
+            partial=True,
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        quiz.starts_at = serializer.validated_data["starts_at"]
+        quiz.ends_at = serializer.validated_data["ends_at"]
+        quiz.status = Quiz.Status.SCHEDULED
+        quiz.save(
+            update_fields=[
+                "starts_at",
+                "ends_at",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            self.get_serializer(quiz).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="start",
+    )
+    def start(self, request, pk=None):
+        """
+        Start a draft or scheduled quiz immediately.
+        """
+
+        quiz = self.get_object()
+
+        if quiz.status not in [
+            Quiz.Status.DRAFT,
+            Quiz.Status.SCHEDULED,
+        ]:
+            return Response(
+                {
+                    "detail": (
+                        "Only draft or scheduled quizzes "
+                        "can be started."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not quiz.quiz_questions.exists():
+            return Response(
+                {
+                    "detail": (
+                        "Quiz must contain at least one "
+                        "question before starting."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiz.status = Quiz.Status.ACTIVE
+        quiz.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            self.get_serializer(quiz).data,
+            status=status.HTTP_200_OK,
+        )
 
     def update(self, request, *args, **kwargs):
         """
