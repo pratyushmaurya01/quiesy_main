@@ -139,6 +139,51 @@ class AnswerSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class ReviewQuestionSerializer(serializers.ModelSerializer):
+    options = serializers.SerializerMethodField()
+    test_cases = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Question
+        fields = [
+            "id",
+            "title",
+            "text",
+            "question_type",
+            "difficulty",
+            "topic",
+            "marks",
+            "starter_code",
+            "options",
+            "test_cases",
+        ]
+
+    def get_options(self, obj):
+        show_correct = self.context.get("show_correct", False)
+        return [
+            {
+                "id": option.id,
+                "text": option.text,
+                "order": option.order,
+                "is_correct": option.is_correct if show_correct else None,
+            }
+            for option in obj.options.all()
+        ]
+
+    def get_test_cases(self, obj):
+        return [
+            {
+                "id": test_case.id,
+                "input_data": test_case.input_data,
+                "expected_output": test_case.expected_output,
+                "is_sample": test_case.is_sample,
+                "order": test_case.order,
+            }
+            for test_case in obj.test_cases.all()
+            if test_case.is_sample
+        ]
+
+
 class AttemptSerializer(serializers.ModelSerializer):
     answers = AnswerSerializer(
         many=True,
@@ -146,12 +191,24 @@ class AttemptSerializer(serializers.ModelSerializer):
     )
 
     questions = serializers.SerializerMethodField()
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+    quiz_code = serializers.CharField(source="quiz.quiz_code", read_only=True)
+    review_enabled = serializers.BooleanField(source="quiz.review_enabled", read_only=True)
+    duration_minutes = serializers.IntegerField(source="quiz.duration_minutes", read_only=True)
+    student_name = serializers.CharField(source="student.name", read_only=True)
+    student_email = serializers.CharField(source="student.email", read_only=True)
 
     class Meta:
         model = ExamAttempt
         fields = [
             "id",
             "quiz",
+            "quiz_title",
+            "quiz_code",
+            "review_enabled",
+            "duration_minutes",
+            "student_name",
+            "student_email",
             "attempt_number",
             "status",
             "started_at",
@@ -159,7 +216,7 @@ class AttemptSerializer(serializers.ModelSerializer):
             "submitted_at",
             "score",
             "max_score",
-            "last_activity_at",
+            "last_activity",
             "answers",
             "questions",
         ]
@@ -178,7 +235,22 @@ class AttemptSerializer(serializers.ModelSerializer):
             .order_by("order", "id")
         )
 
-        return AttemptQuestionSerializer(
-            quiz_questions,
-            many=True,
-        ).data
+        request = self.context.get("request")
+        is_teacher = request and hasattr(request, "user") and (request.user == obj.quiz.teacher or getattr(request.user, "role", "") == "TEACHER")
+
+        is_completed = obj.status in [ExamAttempt.Status.SUBMITTED, ExamAttempt.Status.EVALUATED, ExamAttempt.Status.EXPIRED]
+        show_correct = is_teacher or (is_completed and obj.quiz.review_enabled)
+
+        result = []
+        for qq in quiz_questions:
+            q_data = ReviewQuestionSerializer(
+                qq.question,
+                context={"show_correct": show_correct},
+            ).data
+            result.append({
+                "id": qq.id,
+                "question": q_data,
+                "order": qq.order,
+                "marks_override": qq.marks_override,
+            })
+        return result

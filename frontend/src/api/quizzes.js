@@ -1,5 +1,8 @@
 import API from "./api"
 
+
+// ==================== Questions ====================
+
 export const getQuestions = (params = {}) => {
     return API.get("quizzes/questions/", {
         params,
@@ -22,9 +25,15 @@ export const deactivateQuestion = (id) => {
     return API.delete(`quizzes/questions/${id}/`)
 }
 
+
+// ==================== Question Versions ====================
+
 export const getQuestionVersions = () => {
     return API.get("quizzes/question-versions/")
 }
+
+
+// ==================== Quizzes ====================
 
 export const createQuiz = (data) => {
     return API.post("quizzes/quizzes/", data)
@@ -37,6 +46,27 @@ export const getQuiz = (id) => {
 export const getQuizzes = () => {
     return API.get("quizzes/quizzes/")
 }
+
+export const updateQuiz = (id, data) => {
+    return API.patch(`quizzes/quizzes/${id}/`, data)
+}
+
+
+// ==================== Quiz Lifecycle ====================
+
+export const scheduleQuiz = (id, startsAt, endsAt) => {
+    return API.post(`quizzes/quizzes/${id}/schedule/`, {
+        starts_at: startsAt,
+        ends_at: endsAt,
+    })
+}
+
+export const startQuiz = (id) => {
+    return API.post(`quizzes/quizzes/${id}/start/`)
+}
+
+
+// ==================== Quiz Questions ====================
 
 export const getQuizQuestions = () => {
     return API.get("quizzes/quiz-questions/")
@@ -54,16 +84,19 @@ export const updateQuizQuestion = (quizQuestionId, data) => {
     return API.patch(`quizzes/quiz-questions/${quizQuestionId}/`, data)
 }
 
+
+// ==================== Legacy Quiz APIs ====================
+
 export const getQuizQuestionsByCode = (quizCode) => {
     return API.get(`quiz/${quizCode}/questions/`)
 }
 
 export const getQuizResults = (quizId) => {
-    return API.get(`quiz/${quizId}/results/`)
+    return API.get(`quizzes/quizzes/${quizId}/results/`)
 }
 
 export const toggleQuizReview = (quizId, reviewOn) => {
-    return API.post(`quiz/${quizId}/toggle-review/`, {
+    return API.post(`quizzes/quizzes/${quizId}/toggle-review/`, {
         review_on: reviewOn,
     })
 }

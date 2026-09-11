@@ -5,8 +5,12 @@ from .views import (
     AttemptDetailView,
     JoinQuizView,
     QuizDiscoveryView,
+    QuizInstructionView,
+    RunCodeView,
     StartExamView,
+    StudentAttemptHistoryView,
     StudentTestView,
+    SubmitCodeView,
     SubmitExamView,
 )
 
@@ -28,6 +32,11 @@ urlpatterns = [
         name="quiz-discovery",
     ),
     path(
+        "quizzes/<str:quiz_code>/instructions/",
+        QuizInstructionView.as_view(),
+        name="quiz-instructions",
+    ),
+    path(
         "quizzes/<int:quiz_id>/start/",
         StartExamView.as_view(),
         name="start-exam",
@@ -47,4 +56,20 @@ urlpatterns = [
         SubmitExamView.as_view(),
         name="submit-exam",
     ),
+    path(
+        "my-attempts/",
+        StudentAttemptHistoryView.as_view(),
+        name="student-attempt-history",
+    ),
+    path(
+        "run-code/",
+        RunCodeView.as_view(),
+        name="run-code",
+    ),
+    path(
+        "submit-code/",
+        SubmitCodeView.as_view(),
+        name="submit-code",
+    ),
 ]
+

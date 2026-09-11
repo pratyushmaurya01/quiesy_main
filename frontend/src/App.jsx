@@ -17,6 +17,7 @@ import QuestionBank from "./pages/teacher/QuestionBank"
 import CreateQuestion from "./pages/teacher/CreateQuestion"
 
 import StudentDashboard from "./pages/student/StudentDashboard"
+import ExamInstructions from "./pages/student/ExamInstructions"
 import AdminDashboard from "./pages/admin/AdminDashboard"
 
 import StartQuiz from "./pages/shared/StartQuiz"
@@ -155,6 +156,15 @@ function App() {
                     element={
                         <RoleBasedRoute allowedRoles={["STUDENT"]}>
                             <StudentDashboard />
+                        </RoleBasedRoute>
+                    }
+                />
+
+                <Route
+                    path="/exam/:quizCode/instructions"
+                    element={
+                        <RoleBasedRoute allowedRoles={["STUDENT"]}>
+                            <ExamInstructions />
                         </RoleBasedRoute>
                     }
                 />

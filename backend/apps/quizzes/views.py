@@ -92,128 +92,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
             self._create_version(question)
 
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="schedule",)
-    def schedule(self, request, pk=None):
-        """
-        Schedule a draft quiz.
-
-        Required:
-        - starts_at
-        - ends_at
-        """
-
-        quiz = self.get_object()
-
-        if quiz.status != Quiz.Status.DRAFT:
-            return Response(
-                {
-                    "detail": (
-                        "Only draft quizzes can be scheduled."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        starts_at = request.data.get("starts_at")
-        ends_at = request.data.get("ends_at")
-
-        if not starts_at:
-            return Response(
-                {
-                    "starts_at": "Start time is required."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not ends_at:
-            return Response(
-                {
-                    "ends_at": "End time is required."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        serializer = self.get_serializer(
-            quiz,
-            data={
-                "starts_at": starts_at,
-                "ends_at": ends_at,
-            },
-            partial=True,
-        )
-
-        serializer.is_valid(raise_exception=True)
-
-        quiz.starts_at = serializer.validated_data["starts_at"]
-        quiz.ends_at = serializer.validated_data["ends_at"]
-        quiz.status = Quiz.Status.SCHEDULED
-        quiz.save(
-            update_fields=[
-                "starts_at",
-                "ends_at",
-                "status",
-                "updated_at",
-            ]
-        )
-
-        return Response(
-            self.get_serializer(quiz).data,
-            status=status.HTTP_200_OK,
-        )
-
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="start",
-    )
-    def start(self, request, pk=None):
-        """
-        Start a draft or scheduled quiz immediately.
-        """
-
-        quiz = self.get_object()
-
-        if quiz.status not in [
-            Quiz.Status.DRAFT,
-            Quiz.Status.SCHEDULED,
-        ]:
-            return Response(
-                {
-                    "detail": (
-                        "Only draft or scheduled quizzes "
-                        "can be started."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not quiz.quiz_questions.exists():
-            return Response(
-                {
-                    "detail": (
-                        "Quiz must contain at least one "
-                        "question before starting."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        quiz.status = Quiz.Status.ACTIVE
-        quiz.save(
-            update_fields=[
-                "status",
-                "updated_at",
-            ]
-        )
-
-        return Response(
-            self.get_serializer(quiz).data,
-            status=status.HTTP_200_OK,
-        )
-
     def update(self, request, *args, **kwargs):
         """
         Update a question and create a new immutable version.
@@ -427,6 +305,249 @@ class QuizViewSet(viewsets.ModelViewSet):
         serializer.save(
             teacher=self.request.user
         )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="schedule",
+    )
+    def schedule(self, request, pk=None):
+        """
+        Schedule a draft quiz.
+
+        Required:
+        - starts_at
+        - ends_at
+        """
+
+        quiz = self.get_object()
+
+        if quiz.status != Quiz.Status.DRAFT:
+            return Response(
+                {
+                    "detail": (
+                        "Only draft quizzes can be scheduled."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        starts_at = request.data.get("starts_at")
+        ends_at = request.data.get("ends_at")
+
+        if not starts_at:
+            return Response(
+                {
+                    "starts_at": "Start time is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not ends_at:
+            return Response(
+                {
+                    "ends_at": "End time is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(
+            quiz,
+            data={
+                "starts_at": starts_at,
+                "ends_at": ends_at,
+            },
+            partial=True,
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        quiz.starts_at = serializer.validated_data["starts_at"]
+        quiz.ends_at = serializer.validated_data["ends_at"]
+        quiz.status = Quiz.Status.SCHEDULED
+        quiz.save(
+            update_fields=[
+                "starts_at",
+                "ends_at",
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            self.get_serializer(quiz).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="start",
+    )
+    def start(self, request, pk=None):
+        """
+        Start a draft or scheduled quiz immediately.
+        """
+
+        quiz = self.get_object()
+
+        if quiz.status not in [
+            Quiz.Status.DRAFT,
+            Quiz.Status.SCHEDULED,
+        ]:
+            return Response(
+                {
+                    "detail": (
+                        "Only draft or scheduled quizzes "
+                        "can be started."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not quiz.quiz_questions.exists():
+            return Response(
+                {
+                    "detail": (
+                        "Quiz must contain at least one "
+                        "question before starting."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quiz.status = Quiz.Status.ACTIVE
+        quiz.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+
+        return Response(
+            self.get_serializer(quiz).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="results",
+    )
+    def results(self, request, pk=None):
+        """
+        Return comprehensive results, statistics, and attempts for a quiz owned by this teacher.
+        """
+        from apps.students.models import ExamAttempt
+
+        quiz = self.get_object()
+
+        attempts = (
+            ExamAttempt.objects
+            .filter(
+                quiz=quiz,
+                status__in=[
+                    ExamAttempt.Status.SUBMITTED,
+                    ExamAttempt.Status.EVALUATED,
+                    ExamAttempt.Status.EXPIRED,
+                ],
+            )
+            .select_related("student")
+            .order_by("-score", "submitted_at")
+        )
+
+        results_list = []
+        total_score_sum = 0
+        scores = []
+
+        for att in attempts:
+            earned = float(att.score or 0)
+            total = float(att.max_score or 0)
+            scores.append(earned)
+            total_score_sum += earned
+
+            time_taken = 0
+            if att.started_at and att.submitted_at:
+                diff = (att.submitted_at - att.started_at).total_seconds()
+                time_taken = max(0, int(diff))
+
+            student_name = getattr(att.student, "name", "")
+            if not student_name:
+                student_name = getattr(att.student, "email", "Student").split("@")[0]
+
+            results_list.append({
+                "attempt_id": str(att.id),
+                "student_name": student_name,
+                "email": att.student.email,
+                "score": earned,
+                "max_score": total,
+                "percentage": round((earned / total) * 100, 1) if total > 0 else 0,
+                "time_taken_seconds": time_taken,
+                "status": att.status,
+                "submitted_at": att.submitted_at.isoformat() if att.submitted_at else att.created_at.isoformat(),
+            })
+
+        count = len(scores)
+        quiz_max_score = float(
+            sum(
+                quiz_question.marks_override
+                if quiz_question.marks_override is not None
+                else quiz_question.question.marks
+                for quiz_question in quiz.quiz_questions.select_related(
+                    "question"
+                )
+            )
+        )
+        avg_score = round(total_score_sum / count, 1) if count > 0 else 0
+        highest = max(scores) if count > 0 else 0
+        lowest = min(scores) if count > 0 else 0
+
+        return Response(
+            {
+                "quiz_id": quiz.id,
+                "quiz_title": quiz.title,
+                "quiz_code": quiz.quiz_code,
+                "review_enabled": quiz.review_enabled,
+                "stats": {
+                    "total_students": count,
+                    "max_score": quiz_max_score,
+                    "average_score": avg_score,
+                    "highest_score": highest,
+                    "lowest_score": lowest,
+                },
+                "results": results_list,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="toggle-review",
+    )
+    def toggle_review(self, request, pk=None):
+        """
+        Toggle whether students can view answers and solutions after submitting.
+        """
+        quiz = self.get_object()
+        review_on = request.data.get("review_on")
+
+        if review_on is None:
+            quiz.review_enabled = not quiz.review_enabled
+        else:
+            quiz.review_enabled = bool(review_on)
+
+        quiz.save(update_fields=["review_enabled", "updated_at"])
+
+        return Response(
+            {
+                "id": quiz.id,
+                "review_enabled": quiz.review_enabled,
+                "detail": f"Review is now {'enabled' if quiz.review_enabled else 'disabled'}.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 
 class QuizQuestionViewSet(viewsets.ModelViewSet):

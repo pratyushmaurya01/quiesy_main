@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import ThemeToggle from "../../components/ThemeToggle"
-import API from "../../api/api"
+import { getQuizResults, toggleQuizReview } from "../../api/quizzes"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 
 export default function QuizResults() {
@@ -10,22 +10,41 @@ export default function QuizResults() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [reviewToggling, setReviewToggling] = useState(false)
 
+  const fetchResults = async () => {
+    try {
+      setLoading(true)
+      const res = await getQuizResults(quizId)
+      setData(res.data)
+    } catch (error) {
+      console.error("Failed to fetch results:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const res = await API.get(`quiz/${quizId}/results/`)
-        setData(res.data)
-      } catch (error) {
-        console.error("Failed to fetch results:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchResults()
   }, [quizId])
+
+  const handleToggleReview = async () => {
+    try {
+      setReviewToggling(true)
+      const nextState = !data.review_enabled
+      await toggleQuizReview(quizId, nextState)
+      setData((prev) => ({
+        ...prev,
+        review_enabled: nextState,
+      }))
+    } catch (err) {
+      console.error("Failed to toggle review:", err)
+      alert("Failed to change review status. Please try again.")
+    } finally {
+      setReviewToggling(false)
+    }
+  }
+
 
   // 🔥 Helper Function to format seconds into MM:SS
   const formatTimeTaken = (totalSeconds) => {
@@ -122,16 +141,45 @@ export default function QuizResults() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{data.quiz_title}</h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">Comprehensive Analytics Dashboard</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">{data.quiz_title}</h1>
+              <span className="rounded-md bg-slate-200 dark:bg-slate-800 px-2.5 py-1 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Code: {data.quiz_code}
+              </span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">Comprehensive Analytics & Submissions Dashboard</p>
           </div>
-          <button 
-            onClick={exportToCSV}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm transition-all active:scale-95"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Export CSV
-          </button>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Toggle Student Review Button */}
+            <button
+              disabled={reviewToggling}
+              onClick={handleToggleReview}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-xs sm:text-sm shadow-sm transition-all border ${
+                data.review_enabled
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+                  : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-300 dark:hover:bg-slate-700"
+              }`}
+              type="button"
+            >
+              <span>{data.review_enabled ? "🔓" : "🔒"}</span>
+              <span>
+                {reviewToggling
+                  ? "Updating..."
+                  : data.review_enabled
+                  ? "Student Review: Enabled"
+                  : "Student Review: Disabled"}
+              </span>
+            </button>
+
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-sm transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {/* --- STATS GRID --- */}
@@ -142,15 +190,15 @@ export default function QuizResults() {
           </div>
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-center">
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Average Score</span>
-            <div className="text-3xl font-bold mt-1">{data.stats.avg_score.toFixed(1)}</div>
+            <div className="text-3xl font-bold mt-1">{data.stats.average_score ?? (data.stats.avg_score?.toFixed(1) || "0")}</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-center">
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Highest Score</span>
-            <div className="text-3xl font-bold mt-1 text-green-600 dark:text-green-400">{data.stats.max_score}</div>
+            <div className="text-3xl font-bold mt-1 text-green-600 dark:text-green-400">{data.stats.highest_score ?? (data.stats.max_score || "0")}</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-center">
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Lowest Score</span>
-            <div className="text-3xl font-bold mt-1 text-red-600 dark:text-red-400">{data.stats.min_score}</div>
+            <div className="text-3xl font-bold mt-1 text-red-600 dark:text-red-400">{data.stats.lowest_score ?? (data.stats.min_score || "0")}</div>
           </div>
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-center">
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Pass Rate</span>
@@ -178,14 +226,14 @@ export default function QuizResults() {
 
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <span className="text-yellow-500">🏆</span> Top Performers
+              <span>🏆</span> Leaderboard
             </h2>
-            <div className="flex-1 overflow-y-auto space-y-3">
+            <div className="space-y-3 flex-1 overflow-y-auto max-h-64">
               {topStudents.length === 0 ? (
-                <p className="text-slate-500 text-sm">No attempts yet.</p>
+                <div className="text-center py-8 text-slate-400 text-sm">No submissions yet</div>
               ) : (
                 topStudents.map((student, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                  <div key={index} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${index === 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : index === 1 ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300' : index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
                         {index + 1}
@@ -194,7 +242,7 @@ export default function QuizResults() {
                         <p className="text-sm font-bold truncate max-w-[120px]">{student.student_name}</p>
                       </div>
                     </div>
-                    {/* 🔥 Now shows Score AND Time Taken in Leaderboard */}
+                    {/* Shows Score AND Time Taken in Leaderboard */}
                     <div className="text-right">
                       <div className="font-extrabold text-blue-600 dark:text-blue-400">{student.score} Marks</div>
                       <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{formatTimeTaken(student.time_taken_seconds)}</div>
@@ -210,7 +258,7 @@ export default function QuizResults() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           
           <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/30">
-            <h2 className="text-lg font-bold hidden sm:block">Detailed Results</h2>
+            <h2 className="text-lg font-bold hidden sm:block">Detailed Submissions ({filteredAndSortedResults.length})</h2>
             <div className="relative w-full sm:w-72">
               <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               <input 
@@ -230,32 +278,55 @@ export default function QuizResults() {
                   <th className="px-6 py-4 font-semibold">Student Name</th>
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Score</th>
-                  <th className="px-6 py-4 font-semibold">Time Taken</th> {/* 🔥 New Column */}
+                  <th className="px-6 py-4 font-semibold">Time Taken</th>
                   <th className="px-6 py-4 font-semibold">Submitted At</th>
+                  <th className="px-6 py-4 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {filteredAndSortedResults.length > 0 ? (
                   filteredAndSortedResults.map((r, i) => (
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-6 py-4 font-medium">{r.student_name}</td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{r.email}</td>
-                      <td className="px-6 py-4 font-bold text-blue-600 dark:text-blue-400">{r.score}</td>
-                      {/* 🔥 Renders Time Here */}
+                      <td className="px-6 py-4 font-medium">
+                        <div className="flex items-center gap-2">
+                          <div className="h-7 w-7 rounded-full bg-blue-600/15 text-blue-500 flex items-center justify-center text-xs font-bold">
+                            {(r.student_name || "S").charAt(0).toUpperCase()}
+                          </div>
+                          <span>{r.student_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 font-mono text-xs">{r.email}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-blue-600 dark:text-blue-400">{r.score}</span>
+                        <span className="text-xs text-slate-400"> / {r.max_score || data.stats.max_score} Pts</span>
+                      </td>
                       <td className="px-6 py-4 font-medium text-slate-600 dark:text-slate-300">
                         {formatTimeTaken(r.time_taken_seconds)}
                       </td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400">
+                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">
                         {new Date(r.submitted_at).toLocaleString('en-IN', {
                           day: '2-digit', month: 'short', year: 'numeric',
                           hour: '2-digit', minute: '2-digit'
                         })}
                       </td>
+                      <td className="px-6 py-4 text-right">
+                        {r.attempt_id ? (
+                          <Link
+                            to={`/review/${r.attempt_id}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600/10 hover:bg-blue-600 px-3 py-1.5 text-xs font-semibold text-blue-500 hover:text-white transition-all shadow-xs"
+                          >
+                            <span>Inspect Attempt</span>
+                            <span>→</span>
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-slate-500">
+                    <td colSpan="6" className="px-6 py-8 text-center text-slate-500">
                       No matching records found.
                     </td>
                   </tr>
