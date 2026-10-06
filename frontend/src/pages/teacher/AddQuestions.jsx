@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams } from "react-router-dom"
 import TeacherShell from "../../components/layout/TeacherShell"
+import { motion, AnimatePresence } from "framer-motion"
 import {
     getQuestions,
     getQuestion,
@@ -108,12 +110,18 @@ export default function AddQuestions() {
     const { quizId } = useParams()
     const navigate = useNavigate()
 
-    const [quiz, setQuiz] = useState(null)
-    const [questions, setQuestions] = useState([])
-    const [selectedQuestions, setSelectedQuestions] = useState([])
+    const queryClient = useQueryClient()
 
-    const [loadingQuiz, setLoadingQuiz] = useState(true)
-    const [loadingQuestions, setLoadingQuestions] = useState(true)
+    const { data: quiz, isLoading: loadingQuiz } = useQuery({
+        queryKey: ['quiz', quizId],
+        queryFn: async () => {
+            const res = await getQuiz(quizId)
+            return res.data
+        },
+        staleTime: 1000 * 60 * 5,
+    })
+
+    const [selectedQuestions, setSelectedQuestions] = useState([])
     const [loadingSelected, setLoadingSelected] = useState(true)
 
     const [error, setError] = useState("")
@@ -123,15 +131,32 @@ export default function AddQuestions() {
     const [topic, setTopic] = useState("")
 
     const [page, setPage] = useState(1)
-    const [total, setTotal] = useState(0)
-    const [next, setNext] = useState(null)
-    const [previous, setPrevious] = useState(null)
 
     const [actionId, setActionId] = useState(null)
     const [savingOrder, setSavingOrder] = useState(false)
 
     const [draggedId, setDraggedId] = useState(null)
     const [dragOverId, setDragOverId] = useState(null)
+
+    const { data: qBankData, isLoading: loadingQuestions } = useQuery({
+        queryKey: ['questions', { page, search, type, difficulty, topic, activeOnly: true }],
+        queryFn: async () => {
+            const response = await getQuestions({
+                page,
+                search: search || undefined,
+                question_type: type || undefined,
+                difficulty: difficulty || undefined,
+                topic: topic || undefined,
+                is_active: true,
+            })
+            return response.data
+        },
+        staleTime: 1000 * 60 * 5,
+    })
+    const questions = qBankData?.results || []
+    const total = qBankData?.count || 0
+    const next = qBankData?.next
+    const previous = qBankData?.previous
 
     const selectedIds = useMemo(
         () => new Set(selectedQuestions.map((item) => item.question.id)),
@@ -155,103 +180,58 @@ export default function AddQuestions() {
         Math.ceil(total / 20)
     )
 
-    const loadQuiz = useCallback(async () => {
-        setLoadingQuiz(true)
+    useEffect(() => {
+        let active = true
 
-        try {
-            const response = await getQuiz(quizId)
-            setQuiz(response.data)
-        } catch (requestError) {
-            console.error(requestError)
-            setError("Unable to load this quiz.")
-        } finally {
-            setLoadingQuiz(false)
-        }
-    }, [quizId])
-
-    const loadQuestions = useCallback(async () => {
-        setLoadingQuestions(true)
-
-        try {
-            const response = await getQuestions({
-                page,
-                search: search || undefined,
-                question_type: type || undefined,
-                difficulty: difficulty || undefined,
-                topic: topic || undefined,
-                is_active: true,
-            })
-
-            const data = response.data
-
-            setQuestions(data.results || [])
-            setTotal(data.count || 0)
-            setNext(data.next)
-            setPrevious(data.previous)
-        } catch (requestError) {
-            console.error(requestError)
-            setError("Unable to load the Question Bank.")
-        } finally {
-            setLoadingQuestions(false)
-        }
-    }, [
-        page,
-        search,
-        type,
-        difficulty,
-        topic,
-    ])
-
-    const loadSelectedQuestions = useCallback(async () => {
-        setLoadingSelected(true)
-
-        try {
-            const response = await getQuizQuestions()
-
-            const quizItems = (response.data || [])
-                .filter(
-                    (item) => String(item.quiz) === String(quizId)
-                )
-                .sort(
-                    (a, b) =>
-                        a.order - b.order ||
-                        a.id - b.id
-                )
-
-            const enriched = await Promise.all(
-                quizItems.map(async (item) => {
-                    const questionResponse = await getQuestion(
-                        item.question
-                    )
-
-                    return {
-                        ...item,
-                        question: questionResponse.data,
-                    }
+        const loadSelectedQuestions = async () => {
+            setLoadingSelected(true)
+            try {
+                const response = await queryClient.fetchQuery({
+                    queryKey: ['quizQuestions'],
+                    queryFn: async () => {
+                        const res = await getQuizQuestions()
+                        return res.data || []
+                    },
+                    staleTime: 1000 * 60 * 5
                 })
-            )
 
-            setSelectedQuestions(enriched)
-        } catch (requestError) {
-            console.error(requestError)
-            setError("Unable to load the selected questions.")
-        } finally {
-            setLoadingSelected(false)
+                const quizItems = response
+                    .filter((item) => String(item.quiz) === String(quizId))
+                    .sort((a, b) => a.order - b.order || a.id - b.id)
+
+                const enriched = await Promise.all(
+                    quizItems.map(async (item) => {
+                        const questionData = await queryClient.fetchQuery({
+                            queryKey: ['questionDetails', item.question],
+                            queryFn: async () => {
+                                const res = await getQuestion(item.question)
+                                return res.data
+                            },
+                            staleTime: 1000 * 60 * 5
+                        })
+
+                        return {
+                            ...item,
+                            question: questionData,
+                        }
+                    })
+                )
+
+                if (active) {
+                    setSelectedQuestions(enriched)
+                }
+            } catch (err) {
+                console.error(err)
+                if (active) setError("Unable to load the selected questions.")
+            } finally {
+                if (active) setLoadingSelected(false)
+            }
         }
-    }, [quizId])
 
-    useEffect(() => {
-        loadQuiz()
         loadSelectedQuestions()
-    }, [loadQuiz, loadSelectedQuestions])
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            loadQuestions()
-        }, 250)
-
-        return () => clearTimeout(timer)
-    }, [loadQuestions])
+        return () => { active = false }
+    }, [quizId, queryClient])
 
     const handleSearch = (value) => {
         setSearch(value)
@@ -268,25 +248,45 @@ export default function AddQuestions() {
             return
         }
 
-        setActionId(question.id)
         setError("")
+
+        // Optimistic UI Update - Add immediately to state
+        const tempId = `temp-${Date.now()}`
+        const optimisticItem = {
+            id: tempId,
+            quiz: Number(quizId),
+            question: question,
+            order: selectedQuestions.length,
+            marks_override: null
+        }
+
+        setSelectedQuestions((current) => [...current, optimisticItem])
 
         try {
             const response = await addQuestionToQuiz({
                 quiz: Number(quizId),
                 question: question.id,
-                order: selectedQuestions.length,
+                order: optimisticItem.order,
             })
 
-            setSelectedQuestions((current) => [
-                ...current,
-                {
-                    ...response.data,
-                    question,
-                },
-            ])
+            // Swap out temp item with real item from backend
+            setSelectedQuestions((current) =>
+                current.map((item) =>
+                    item.id === tempId
+                        ? { ...response.data, question }
+                        : item
+                )
+            )
+            
+            // Invalidate cache in background just to be safe
+            queryClient.invalidateQueries({ queryKey: ['quizQuestions'] })
         } catch (requestError) {
             console.error(requestError)
+
+            // Revert UI if error occurs
+            setSelectedQuestions((current) =>
+                current.filter((item) => item.id !== tempId)
+            )
 
             if (requestError.response?.status === 400) {
                 setError(
@@ -298,30 +298,36 @@ export default function AddQuestions() {
                     "Unable to add this question. Please try again."
                 )
             }
-        } finally {
-            setActionId(null)
         }
     }
 
     const removeQuestion = async (quizQuestionId) => {
-        setActionId(quizQuestionId)
         setError("")
 
-        try {
-            await removeQuestionFromQuiz(quizQuestionId)
+        // Find the item in case we need to revert
+        const itemToRemove = selectedQuestions.find(item => item.id === quizQuestionId)
+        if (!itemToRemove) return
 
-            setSelectedQuestions((current) =>
-                current.filter(
-                    (item) => item.id !== quizQuestionId
-                )
-            )
+        // Optimistic UI Update - Remove immediately
+        setSelectedQuestions((current) =>
+            current.filter((item) => item.id !== quizQuestionId)
+        )
+
+        try {
+            // Only make API call if it's a real backend ID
+            if (!String(quizQuestionId).startsWith('temp-')) {
+                await removeQuestionFromQuiz(quizQuestionId)
+                queryClient.invalidateQueries({ queryKey: ['quizQuestions'] })
+            }
         } catch (requestError) {
             console.error(requestError)
+            
+            // Revert UI if error occurs
+            setSelectedQuestions((current) => [...current, itemToRemove])
+            
             setError(
                 "Unable to remove the question. Please try again."
             )
-        } finally {
-            setActionId(null)
         }
     }
 
@@ -497,8 +503,15 @@ export default function AddQuestions() {
     )
 
     return (
-        <TeacherShell>
+        <TeacherShell
+            breadcrumbs={[
+                { label: "Quizzes", to: "/dashboard" },
+                { label: quiz?.title || "Quiz", to: `/edit-quiz/${quizId}` },
+                { label: "Add Questions" },
+            ]}
+        >
             <div className="w-full max-w-[1280px] mx-auto pb-28">
+
 
                 {/* Header */}
                 <div className="pt-5 sm:pt-7 mb-6">
@@ -550,7 +563,7 @@ export default function AddQuestions() {
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-2.5 bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-lg px-3.5 py-2 shrink-0">
+                        <div className="flex items-center gap-2.5 bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-lg px-3.5 py-2 shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-none">
                             <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400" />
 
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -600,9 +613,9 @@ export default function AddQuestions() {
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)] gap-5 items-start">
 
                     {/* Question Bank */}
-                    <section className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-xl overflow-hidden">
+                    <section className="bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
 
-                        <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-[#303030]">
+                        <div className="px-5 sm:px-6 py-4 border-b border-slate-200/80 dark:border-slate-800">
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -614,14 +627,14 @@ export default function AddQuestions() {
                                     </p>
                                 </div>
 
-                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#292929] px-2.5 py-1 rounded-full">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#1E2128] border border-slate-200/60 dark:border-slate-800 px-2.5 py-1 rounded-full">
                                     {total} available
                                 </span>
                             </div>
                         </div>
 
                         {/* Filters */}
-                        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-[#303030]">
+                        <div className="p-4 sm:p-5 border-b border-slate-200/80 dark:border-slate-800">
 
                             <div className="relative">
                                 <Icon
@@ -636,7 +649,7 @@ export default function AddQuestions() {
                                         handleSearch(event.target.value)
                                     }
                                     placeholder="Search questions, topics, or keywords..."
-                                    className="w-full h-10 pl-10 pr-3.5 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                    className="w-full h-10 pl-10 pr-3.5 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#1E2128] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                                 />
                             </div>
 
@@ -649,7 +662,7 @@ export default function AddQuestions() {
                                             event.target.value
                                         )
                                     }
-                                    className="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
+                                    className="h-9 px-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#1E2128] text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
                                 >
                                     <option value="">
                                         All Types
@@ -675,7 +688,7 @@ export default function AddQuestions() {
                                             event.target.value
                                         )
                                     }
-                                    className="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
+                                    className="h-9 px-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#1E2128] text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
                                 >
                                     <option value="">
                                         All Difficulties
@@ -701,10 +714,11 @@ export default function AddQuestions() {
                                             )
                                         }
                                         placeholder="Filter by topic"
-                                        className="w-full h-9 px-3 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-xs text-slate-700 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-blue-500"
+                                        className="w-full h-9 px-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#1E2128] text-xs text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-blue-500"
                                     />
                                 </div>
                             </div>
+
 
                             {(search || type || difficulty || topic) && (
                                 <button
@@ -725,13 +739,13 @@ export default function AddQuestions() {
                                     {[1, 2, 3, 4].map((item) => (
                                         <div
                                             key={item}
-                                            className="h-[92px] rounded-lg bg-slate-100 dark:bg-[#292929] animate-pulse"
+                                            className="h-[92px] rounded-lg bg-slate-100 dark:bg-[#181A20] animate-pulse"
                                         />
                                     ))}
                                 </div>
                             ) : questions.length === 0 ? (
                                 <div className="py-14 text-center">
-                                    <div className="w-10 h-10 mx-auto rounded-xl bg-slate-100 dark:bg-[#292929] flex items-center justify-center text-slate-400">
+                                    <div className="w-10 h-10 mx-auto rounded-xl bg-slate-100 dark:bg-[#181A20] flex items-center justify-center text-slate-400">
                                         <Icon
                                             name="search"
                                             className="w-5 h-5"
@@ -761,8 +775,8 @@ export default function AddQuestions() {
                                                 key={question.id}
                                                 className={`group rounded-lg border p-3.5 transition-all duration-200 ${
                                                     isAdded
-                                                        ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/10"
-                                                        : "border-slate-200 dark:border-[#333333] bg-slate-50/70 dark:bg-[#242424] hover:border-blue-300 dark:hover:border-blue-800 hover:-translate-y-[1px]"
+                                                        ? "border-emerald-300 dark:border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-950/20"
+                                                        : "border-slate-300/80 dark:border-slate-800 bg-white dark:bg-[#181A20] hover:border-blue-400 dark:hover:border-slate-700 hover:-translate-y-[1px]"
                                                 }`}
                                             >
                                                 <div className="flex items-start gap-3">
@@ -821,8 +835,8 @@ export default function AddQuestions() {
                                                         }
                                                         className={`shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-semibold transition-all ${
                                                             isAdded
-                                                                ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 cursor-default"
-                                                                : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white active:scale-95 disabled:opacity-60"
+                                                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 cursor-default"
+                                                                : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white active:scale-95 disabled:opacity-60 cursor-pointer"
                                                         }`}
                                                     >
                                                         {isAdding ? (
@@ -853,7 +867,7 @@ export default function AddQuestions() {
                             {/* Pagination */}
                             {!loadingQuestions &&
                                 questions.length > 0 && (
-                                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-[#303030]">
+                                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200/80 dark:border-slate-800">
 
                                         <span className="text-[11px] text-slate-400 dark:text-slate-500">
                                             Page {page} of {totalPages}
@@ -872,7 +886,7 @@ export default function AddQuestions() {
                                                             )
                                                     )
                                                 }
-                                                className="w-8 h-8 rounded-md border border-slate-200 dark:border-[#373737] flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-[#292929] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                className="w-8 h-8 rounded-md border border-slate-300/80 dark:border-[#3A3F47] flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-[#1E2128] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                                             >
                                                 <Icon
                                                     name="chevronLeft"
@@ -893,7 +907,7 @@ export default function AddQuestions() {
                                                             current + 1
                                                     )
                                                 }
-                                                className="w-8 h-8 rounded-md border border-slate-200 dark:border-[#373737] flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-[#292929] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                className="w-8 h-8 rounded-md border border-slate-300/80 dark:border-[#3A3F47] flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-[#1E2128] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                                             >
                                                 <Icon
                                                     name="chevronRight"
@@ -907,9 +921,10 @@ export default function AddQuestions() {
                     </section>
 
                     {/* Selected Questions */}
-                    <section className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-xl overflow-hidden xl:sticky xl:top-20">
+                    <section className="bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-xl overflow-hidden xl:sticky xl:top-20 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
 
-                        <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-[#303030] flex items-center justify-between gap-4">
+                        <div className="px-5 sm:px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-4">
+
                             <div>
                                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
                                     Selected Questions
@@ -940,13 +955,13 @@ export default function AddQuestions() {
                                     {[1, 2, 3].map((item) => (
                                         <div
                                             key={item}
-                                            className="h-[110px] rounded-lg bg-slate-100 dark:bg-[#292929] animate-pulse"
+                                            className="h-[110px] rounded-lg bg-slate-100 dark:bg-[#181A20] animate-pulse"
                                         />
                                     ))}
                                 </div>
                             ) : selectedQuestions.length === 0 ? (
                                 <div className="min-h-[300px] flex flex-col items-center justify-center text-center px-5">
-                                    <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-[#292929] text-slate-400 flex items-center justify-center">
+                                    <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-[#181A20] text-slate-400 flex items-center justify-center">
                                         <Icon
                                             name="book"
                                             className="w-6 h-6"
@@ -962,33 +977,39 @@ export default function AddQuestions() {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="space-y-2.5">
-                                    {selectedQuestions.map(
-                                        (item, index) => {
-                                            const question =
-                                                item.question
+                                <motion.div layout className="space-y-2.5">
+                                    <AnimatePresence initial={false}>
+                                        {selectedQuestions.map(
+                                            (item, index) => {
+                                                const question =
+                                                    item.question
 
-                                            const isDragging =
-                                                draggedId === item.id
+                                                const isDragging =
+                                                    draggedId === item.id
 
-                                            const isDropTarget =
-                                                dragOverId === item.id &&
-                                                draggedId !== item.id
+                                                const isDropTarget =
+                                                    dragOverId === item.id &&
+                                                    draggedId !== item.id
 
-                                            const marks = Number(
-                                                item.marks_override ??
-                                                question.marks
-                                            )
+                                                const marks = Number(
+                                                    item.marks_override ??
+                                                    question.marks
+                                                )
 
-                                            return (
-                                                <article
-                                                    key={item.id}
-                                                    draggable={
-                                                        !savingOrder
-                                                    }
-                                                    onDragStart={(event) =>
-                                                        handleDragStart(
-                                                            event,
+                                                return (
+                                                    <motion.article
+                                                        layout
+                                                        initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, height: "auto", scale: 1 }}
+                                                        exit={{ opacity: 0, height: 0, scale: 0.95, margin: 0, overflow: "hidden" }}
+                                                        transition={{ opacity: { duration: 0.2 }, layout: { type: "spring", bounce: 0, duration: 0.4 } }}
+                                                        key={item.id}
+                                                        draggable={
+                                                            !savingOrder
+                                                        }
+                                                        onDragStart={(event) =>
+                                                            handleDragStart(
+                                                                event,
                                                             item.id
                                                         )
                                                     }
@@ -1010,11 +1031,11 @@ export default function AddQuestions() {
                                                     className={`relative rounded-lg border p-3.5 transition-all duration-200 ${
                                                         isDragging
                                                             ? "opacity-50 scale-[0.99] shadow-lg"
-                                                            : "bg-slate-50 dark:bg-[#242424]"
+                                                            : "bg-white dark:bg-[#181A20]"
                                                     } ${
                                                         isDropTarget
                                                             ? "border-blue-500 dark:border-blue-400"
-                                                            : "border-slate-200 dark:border-[#333333]"
+                                                            : "border-slate-300/80 dark:border-slate-800"
                                                     }`}
                                                 >
                                                     {/* Subtle drop indicator */}
@@ -1036,7 +1057,7 @@ export default function AddQuestions() {
                                                         </div>
 
                                                         {/* Number */}
-                                                        <div className="shrink-0 w-6 h-6 rounded-md bg-slate-200 dark:bg-[#303030] text-slate-700 dark:text-slate-200 text-[10px] font-bold flex items-center justify-center">
+                                                        <div className="shrink-0 w-6 h-6 rounded-md bg-slate-100 dark:bg-[#252830] border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-bold flex items-center justify-center">
                                                             {index + 1}
                                                         </div>
 
@@ -1084,7 +1105,7 @@ export default function AddQuestions() {
                                                                 )
                                                             }
                                                             aria-label="Remove question"
-                                                            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 transition-colors"
+                                                            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40 transition-colors cursor-pointer"
                                                         >
                                                             {actionId ===
                                                             item.id ? (
@@ -1112,7 +1133,7 @@ export default function AddQuestions() {
                                                                     -1
                                                                 )
                                                             }
-                                                            className="w-7 h-7 rounded-md border border-slate-200 dark:border-[#373737] flex items-center justify-center text-slate-400 disabled:opacity-25"
+                                                            className="w-7 h-7 rounded-md border border-slate-300/80 dark:border-[#3A3F47] flex items-center justify-center text-slate-400 disabled:opacity-25"
                                                         >
                                                             <Icon
                                                                 name="chevronUp"
@@ -1134,7 +1155,7 @@ export default function AddQuestions() {
                                                                     1
                                                                 )
                                                             }
-                                                            className="w-7 h-7 rounded-md border border-slate-200 dark:border-[#373737] flex items-center justify-center text-slate-400 disabled:opacity-25"
+                                                            className="w-7 h-7 rounded-md border border-slate-300/80 dark:border-[#3A3F47] flex items-center justify-center text-slate-400 disabled:opacity-25"
                                                         >
                                                             <Icon
                                                                 name="chevronDown"
@@ -1146,11 +1167,12 @@ export default function AddQuestions() {
                                                             Drag on desktop
                                                         </span>
                                                     </div>
-                                                </article>
+                                                </motion.article>
                                             )
                                         }
                                     )}
-                                </div>
+                                    </AnimatePresence>
+                                </motion.div>
                             )}
                         </div>
                     </section>
@@ -1158,7 +1180,8 @@ export default function AddQuestions() {
             </div>
 
             {/* Bottom action dock */}
-            <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 z-40 border-t border-slate-200 dark:border-[#303030] bg-white/95 dark:bg-[#1b1b1b]/95 backdrop-blur-md">
+            <div className="fixed bottom-0 left-0 lg:left-[280px] right-0 z-40 border-t border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-[#141518]/95 backdrop-blur-md">
+
 
                 <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
 
@@ -1182,10 +1205,11 @@ export default function AddQuestions() {
                             type="button"
                             disabled={savingOrder}
                             onClick={() => navigate("/dashboard")}
-                            className="h-9 px-3.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#292929] transition-colors disabled:opacity-40"
+                            className="h-9 px-3.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1E2128] transition-colors disabled:opacity-40 cursor-pointer"
                         >
                             Cancel
                         </button>
+
 
                         <button
                             type="button"

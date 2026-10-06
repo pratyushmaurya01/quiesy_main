@@ -104,38 +104,39 @@ export default function QuizCard({
     questionCount = 0,
     totalMarks = null,
     onSelect,
+    onLiveProctor,
 }) {
     return (
         <button
             type="button"
             onClick={onSelect}
             className={[
-                "group relative flex min-h-[178px] w-full flex-col rounded-xl border p-4 text-left transition-all duration-150",
-                "bg-white dark:bg-[#181a1e]",
+                "group relative flex min-h-[178px] w-full flex-col rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer",
+                "bg-white dark:bg-[#15171b]",
                 selected
-                    ? "border-blue-500 shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
-                    : "border-slate-200 hover:border-slate-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-slate-700",
+                    ? "border-blue-600 shadow-[0_4px_16px_rgba(37,99,235,0.15),0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-blue-600/40"
+                    : "border-slate-300/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-slate-400 hover:shadow-[0_4px_14px_rgba(0,0,0,0.08)] dark:border-slate-800 dark:shadow-none dark:hover:border-slate-700/90",
             ].join(" ")}
         >
             {/* Selected indicator */}
             <span
                 className={[
-                    "absolute left-0 top-5 h-7 w-0.5 rounded-r-full transition-opacity",
-                    selected ? "bg-blue-500 opacity-100" : "opacity-0",
+                    "absolute left-0 top-5 h-7 w-1 rounded-r-full transition-opacity duration-200",
+                    selected ? "bg-blue-600 opacity-100 shadow-[0_0_8px_rgba(37,99,235,0.4)]" : "opacity-0",
                 ].join(" ")}
             />
 
             {/* Top row */}
             <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-blue-500 dark:bg-slate-800">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-slate-800/80 dark:text-blue-400">
                         <Icon
                             name="quiz"
                             className="h-3.5 w-3.5"
                         />
                     </span>
 
-                    <span className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    <span className="truncate text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                         {quiz.subject || "General"}
                     </span>
                 </div>
@@ -152,50 +153,50 @@ export default function QuizCard({
 
             {/* Title */}
             <div className="mt-3 min-w-0">
-                <h3 className="line-clamp-2 text-[15px] font-bold leading-5 tracking-tight text-slate-900 dark:text-white">
+                <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-slate-900 dark:text-white">
                     {quiz.title || "Untitled Quiz"}
                 </h3>
             </div>
 
-            {/* Metrics */}
-            <div className="mt-4 grid grid-cols-3 border-y border-slate-200 py-3 dark:border-slate-800">
+            {/* Metrics - Strong Numerical Hierarchy */}
+            <div className="mt-4 grid grid-cols-3 border-y border-slate-200/90 py-3 dark:border-slate-800">
                 <div className="min-w-0">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                         Questions
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
-                        {questionCount}
+                    <p className="mt-1 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        {questionCount || 0}
                     </p>
                 </div>
 
-                <div className="border-l border-slate-200 pl-3 dark:border-slate-800">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                <div className="border-l border-slate-200/90 pl-3 dark:border-slate-800">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                         Marks
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
-                        {totalMarks ?? "—"}
+                    <p className="mt-1 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        {totalMarks ?? 0}
                     </p>
                 </div>
 
-                <div className="border-l border-slate-200 pl-3 dark:border-slate-800">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                <div className="border-l border-slate-200/90 pl-3 dark:border-slate-800">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                         Duration
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">
+                    <p className="mt-1 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
                         {quiz.duration_minutes || 0}m
                     </p>
                 </div>
             </div>
 
             {/* Bottom */}
-            <div className="mt-auto flex items-center justify-between pt-3">
-                <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-slate-400">
+            <div className="mt-auto flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
                     <Icon
                         name="clock"
-                        className="h-3 w-3 shrink-0"
+                        className="h-3.5 w-3.5 shrink-0 text-slate-400"
                     />
 
                     <span className="truncate">
@@ -203,16 +204,21 @@ export default function QuizCard({
                     </span>
                 </span>
 
-                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-blue-500 transition group-hover:gap-1.5">
-                    {quiz.status === "DRAFT"
-                        ? "Continue"
-                        : "View"}
-
-                    <Icon
-                        name="arrow"
-                        className="h-3 w-3"
-                    />
-                </span>
+                <div className="flex items-center gap-2">
+                    <span 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onLiveProctor) {
+                                onLiveProctor(quiz.id);
+                            }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:hover:bg-purple-500/20 transition-all border border-purple-200/60 dark:border-purple-500/20 shadow-xs cursor-pointer active:scale-95"
+                        title="Open Live Proctoring & Anti-Cheat Monitor"
+                    >
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Monitor
+                    </span>
+                </div>
             </div>
         </button>
     )

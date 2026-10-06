@@ -24,8 +24,10 @@ import StartQuiz from "./pages/shared/StartQuiz"
 import QuizAttempt from "./pages/shared/QuizAttempt"
 import Review from "./pages/shared/Review"
 import QuizResults from "./pages/shared/QuizResult"
+import LiveProctor from "./pages/teacher/LiveProctor"
 
 import RoleBasedRoute from "./components/RoleBasedRoute"
+
 
 function App() {
     useEffect(() => {
@@ -131,6 +133,16 @@ function App() {
                         </RoleBasedRoute>
                     }
                 />
+
+                <Route
+                    path="/quiz/:quizId/live-proctor"
+                    element={
+                        <RoleBasedRoute allowedRoles={["TEACHER"]}>
+                            <LiveProctor />
+                        </RoleBasedRoute>
+                    }
+                />
+
 
                 <Route
                     path="/question-bank"

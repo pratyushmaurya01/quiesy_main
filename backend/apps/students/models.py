@@ -68,9 +68,16 @@ class ExamAttempt(models.Model):
         unique=True,
     )
 
+    # Real-Time Proctoring & Anti-Cheating Fields
+    tab_switch_count = models.PositiveIntegerField(default=0)
+    is_blocked = models.BooleanField(default=False)
+    blocked_at = models.DateTimeField(null=True, blank=True)
+    paused_seconds_remaining = models.PositiveIntegerField(null=True, blank=True)
+
     last_activity = models.DateTimeField(
         auto_now=True,
     )
+
 
     created_at = models.DateTimeField(
         auto_now_add=True,

@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom"
+
 function Icon({ name, className = "h-5 w-5" }) {
     const icons = {
         quiz: (
@@ -109,13 +111,13 @@ function formatDate(value) {
 
 function InfoMetric({ icon, label, value }) {
     return (
-        <div className="min-w-0 px-3 py-3.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+        <div className="min-w-0 px-3 py-3">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wider uppercase text-slate-400 dark:text-slate-500">
                 <Icon name={icon} className="h-3.5 w-3.5" />
                 <span>{label}</span>
             </div>
 
-            <p className="mt-2 truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            <p className="mt-1.5 truncate text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                 {value}
             </p>
         </div>
@@ -124,13 +126,13 @@ function InfoMetric({ icon, label, value }) {
 
 function ScheduleBox({ label, value }) {
     return (
-        <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-                <Icon name="calendar" className="h-3.5 w-3.5" />
-                {label}
+        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-800/60 dark:bg-slate-900/60">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+                <Icon name="calendar" className="h-3 w-3" />
+                <span>{label}</span>
             </div>
 
-            <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+            <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
                 {value}
             </p>
         </div>
@@ -220,7 +222,10 @@ export default function QuizDetailCard({
     onEdit,
     onQuestions,
     onResults,
+    onLiveProctor,
 }) {
+    const navigate = useNavigate()
+
     if (!quiz) {
         return (
             <div className="flex h-full min-h-0 items-center justify-center rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-[#141518]">
@@ -246,7 +251,7 @@ export default function QuizDetailCard({
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#141518]">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300/90 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 animate-fadeIn dark:border-slate-800 dark:bg-[#141518] dark:shadow-none">
             {/* =========================================================
                 HEADER
             ========================================================== */}
@@ -267,34 +272,55 @@ export default function QuizDetailCard({
                             </span>
                         </div>
 
-                        <h2 className="truncate text-xl font-bold tracking-tight text-slate-950 dark:text-white">
+                        <h2 className="truncate text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">
                             {quiz.title || "Untitled Quiz"}
                         </h2>
 
-                        <p className="mt-1 truncate text-xs text-slate-400">
-                            {quiz.description ||
-                                "No description provided"}
+                        <p className="mt-1.5 truncate text-sm text-slate-500 dark:text-slate-300">
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">Description: </span>
+                            {quiz.description || "No description provided"}
                         </p>
                     </div>
 
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500 dark:bg-blue-500/10">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500 dark:bg-blue-500/10">
                         <Icon
                             name="quiz"
-                            className="h-4 w-4"
+                            className="h-5 w-5"
                         />
                     </div>
                 </div>
 
-                {/* Actions */}
-                <div className="mt-4 grid grid-cols-3 gap-2">
+                {/* Actions - Uniform, balanced square-cut buttons with identical sizes */}
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (onLiveProctor && quiz?.id) {
+                                onLiveProctor(quiz.id);
+                            } else if (quiz?.id) {
+                                navigate(`/quiz/${quiz.id}/live-proctor`);
+                            }
+                        }}
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-sm transition-all hover:shadow-[0_0_12px_rgba(168,85,247,0.4)] active:scale-[0.98] cursor-pointer"
+                        title="Open Live Proctoring & Anti-Cheat Monitor"
+                    >
+                        <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400"></span>
+                        </span>
+                        Monitor
+                    </button>
+
                     <button
                         type="button"
                         onClick={() => onQuestions?.(quiz.id)}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] cursor-pointer dark:border-slate-800 dark:bg-[#141518] dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                         <Icon
                             name="questions"
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400"
                         />
                         Questions
                     </button>
@@ -302,11 +328,11 @@ export default function QuizDetailCard({
                     <button
                         type="button"
                         onClick={() => onEdit?.(quiz.id)}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] cursor-pointer dark:border-slate-800 dark:bg-[#141518] dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                         <Icon
                             name="edit"
-                            className="h-3.5 w-3.5"
+                            className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400"
                         />
                         Edit
                     </button>
@@ -314,7 +340,7 @@ export default function QuizDetailCard({
                     <button
                         type="button"
                         onClick={() => onResults?.(quiz.id)}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-xs font-semibold text-white transition hover:bg-blue-700"
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] cursor-pointer"
                     >
                         <Icon
                             name="results"
@@ -326,21 +352,19 @@ export default function QuizDetailCard({
             </div>
 
             {/* =========================================================
-                METRICS
-
-                Fixed-size compact block. No scroll.
+                METRICS (Removed vertical dividing lines, use clean spacing)
             ========================================================== */}
-            <div className="grid shrink-0 grid-cols-4 divide-x border-b border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            <div className="grid shrink-0 grid-cols-4 border-b border-slate-200/80 px-3 dark:border-slate-800">
                 <InfoMetric
                     icon="questions"
                     label="Questions"
-                    value={questionCount}
+                    value={questionCount || 0}
                 />
 
                 <InfoMetric
                     icon="marks"
                     label="Total Marks"
-                    value={totalMarks ?? "—"}
+                    value={totalMarks ?? 0}
                 />
 
                 <InfoMetric
@@ -441,34 +465,34 @@ export default function QuizDetailCard({
                                             item.id ||
                                             `${item.question}-${index}`
                                         }
-                                        className="flex min-w-0 items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-900"
+                                        className="flex min-w-0 items-center gap-3 rounded-lg bg-slate-50 px-3.5 py-3 dark:bg-slate-900"
                                     >
-                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-200 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-200 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                             {item.order ??
                                                 index + 1}
                                         </span>
 
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                                {getQuestionTitle(
-                                                    question
-                                                )}
-                                            </p>
+                                             <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                                 {getQuestionTitle(
+                                                     question
+                                                 )}
+                                             </p>
 
-                                            <p className="mt-0.5 truncate text-[10px] text-slate-400">
-                                                {getQuestionType(
-                                                    question
-                                                )}{" "}
-                                                ·{" "}
-                                                {getQuestionDifficulty(
-                                                    question
-                                                )}{" "}
-                                                ·{" "}
-                                                {getQuestionMarks(
-                                                    item
-                                                )}{" "}
-                                                marks
-                                            </p>
+                                             <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                                                 {getQuestionType(
+                                                     question
+                                                 )}{" "}
+                                                 ·{" "}
+                                                 {getQuestionDifficulty(
+                                                     question
+                                                 )}{" "}
+                                                 ·{" "}
+                                                 {getQuestionMarks(
+                                                     item
+                                                 )}{" "}
+                                                 marks
+                                             </p>
                                         </div>
                                     </div>
                                 )
@@ -486,7 +510,7 @@ export default function QuizDetailCard({
                                 onClick={() =>
                                     onQuestions?.(quiz.id)
                                 }
-                                className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-[11px] font-semibold text-blue-500 transition hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-blue-500/5"
+                                className="w-full rounded-lg border border-dashed border-slate-300 py-2 text-[11px] font-semibold text-blue-500 transition hover:bg-blue-50 active:scale-[0.99] cursor-pointer dark:border-slate-700 dark:hover:bg-blue-500/5"
                             >
                                 View all {questionLinks.length} questions
                             </button>

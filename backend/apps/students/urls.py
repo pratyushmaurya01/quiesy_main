@@ -12,7 +12,9 @@ from .views import (
     StudentTestView,
     SubmitCodeView,
     SubmitExamView,
+    CodeTaskStatusView,
 )
+
 
 
 urlpatterns = [
@@ -71,5 +73,11 @@ urlpatterns = [
         SubmitCodeView.as_view(),
         name="submit-code",
     ),
+    path(
+        "code-tasks/<str:task_id>/",
+        CodeTaskStatusView.as_view(),
+        name="code-task-status",
+    ),
 ]
+
 

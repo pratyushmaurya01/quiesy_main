@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import TeacherShell from "../../components/layout/TeacherShell"
 import { createQuestion } from "../../api/quizzes"
+import { motion, AnimatePresence } from "framer-motion"
 
 const QUESTION_TYPES = [
     {
@@ -806,88 +807,94 @@ export default function CreateQuestion() {
                                         </div>
 
                                         <div className="space-y-3">
-                                            {options.map(
-                                                (option, index) => (
-                                                    <div
-                                                        key={index}
-                                                        className={`group flex items-center gap-3 rounded-xl border p-3 transition-all sm:p-4 ${
-                                                            option.is_correct
-                                                                ? "border-blue-400 bg-blue-50/70 dark:border-[#2b4c7e] dark:bg-[#1a2333]"
-                                                                : "border-slate-200 bg-white hover:border-blue-300 dark:border-[#2b2b2b] dark:bg-[#1a1a1a] dark:hover:border-[#3d3d3d]"
-                                                        }`}
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                selectCorrectOption(
-                                                                    index
-                                                                )
-                                                            }
-                                                            aria-label={`Mark option ${
-                                                                index + 1
-                                                            } as correct`}
-                                                            className={`flex h-5 w-5 shrink-0 items-center justify-center ${
-                                                                form.question_type ===
-                                                                "MCQ"
-                                                                    ? "rounded-full"
-                                                                    : "rounded"
-                                                            } border-2 transition-colors ${
+                                            <AnimatePresence initial={false}>
+                                                {options.map(
+                                                    (option, index) => (
+                                                        <motion.div
+                                                            key={index}
+                                                            initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                            animate={{ opacity: 1, height: "auto", scale: 1 }}
+                                                            exit={{ opacity: 0, height: 0, scale: 0.95, margin: 0, overflow: "hidden" }}
+                                                            transition={{ opacity: { duration: 0.2 }, layout: { type: "spring", bounce: 0, duration: 0.4 } }}
+                                                            className={`group flex items-center gap-3 rounded-xl border p-3 transition-all sm:p-4 ${
                                                                 option.is_correct
-                                                                    ? "border-[#4d8eff] bg-[#4d8eff] text-white"
-                                                                    : "border-slate-300 dark:border-[#545864]"
+                                                                    ? "border-blue-400 bg-blue-50/70 dark:border-[#2b4c7e] dark:bg-[#1a2333]"
+                                                                    : "border-slate-200 bg-white hover:border-blue-300 dark:border-[#2b2b2b] dark:bg-[#1a1a1a] dark:hover:border-[#3d3d3d]"
                                                             }`}
                                                         >
-                                                            {option.is_correct && (
-                                                                <span className="text-[10px] font-bold">
-                                                                    ✓
-                                                                </span>
-                                                            )}
-                                                        </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    selectCorrectOption(
+                                                                        index
+                                                                    )
+                                                                }
+                                                                aria-label={`Mark option ${
+                                                                    index + 1
+                                                                } as correct`}
+                                                                className={`flex h-5 w-5 shrink-0 items-center justify-center ${
+                                                                    form.question_type ===
+                                                                    "MCQ"
+                                                                        ? "rounded-full"
+                                                                        : "rounded"
+                                                                } border-2 transition-colors ${
+                                                                    option.is_correct
+                                                                        ? "border-[#4d8eff] bg-[#4d8eff] text-white"
+                                                                        : "border-slate-300 dark:border-[#545864]"
+                                                                }`}
+                                                            >
+                                                                {option.is_correct && (
+                                                                    <span className="text-[10px] font-bold">
+                                                                        ✓
+                                                                    </span>
+                                                                )}
+                                                            </button>
 
-                                                        <input
-                                                            type="text"
-                                                            value={
-                                                                option.text
-                                                            }
-                                                            onChange={(
-                                                                event
-                                                            ) =>
-                                                                updateOption(
-                                                                    index,
-                                                                    "text",
+                                                            <input
+                                                                type="text"
+                                                                value={
+                                                                    option.text
+                                                                }
+                                                                onChange={(
                                                                     event
-                                                                        .target
-                                                                        .value
-                                                                )
-                                                            }
-                                                            placeholder={`Option ${
-                                                                index + 1
-                                                            }`}
-                                                            className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0 dark:text-white dark:placeholder:text-[#737686]"
-                                                        />
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                removeOption(
-                                                                    index
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                options.length <=
-                                                                2
-                                                            }
-                                                            className="rounded-lg p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30 dark:text-[#545864] dark:hover:text-[#ffb4ab]"
-                                                            title="Remove option"
-                                                        >
-                                                            <Icon
-                                                                name="trash"
-                                                                className="h-4 w-4"
+                                                                ) =>
+                                                                    updateOption(
+                                                                        index,
+                                                                        "text",
+                                                                        event
+                                                                            .target
+                                                                            .value
+                                                                    )
+                                                                }
+                                                                placeholder={`Option ${
+                                                                    index + 1
+                                                                }`}
+                                                                className="focus-ring-smooth min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-0 dark:text-white dark:placeholder:text-[#737686]"
                                                             />
-                                                        </button>
-                                                    </div>
-                                                )
-                                            )}
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeOption(
+                                                                        index
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    options.length <=
+                                                                    2
+                                                                }
+                                                                className="rounded-lg p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30 dark:text-[#545864] dark:hover:text-[#ffb4ab] btn-tactile"
+                                                                title="Remove option"
+                                                            >
+                                                                <Icon
+                                                                    name="trash"
+                                                                    className="h-4 w-4"
+                                                                />
+                                                            </button>
+                                                        </motion.div>
+                                                    )
+                                                )}
+                                            </AnimatePresence>
                                         </div>
 
                                         {fieldErrors.options && (
@@ -960,37 +967,42 @@ export default function CreateQuestion() {
                                             </button>
                                         </div>
 
-                                        {testCases.map(
-                                            (testCase, index) => (
-                                                <div
-                                                    key={index}
-                                                    className="rounded-xl border border-slate-200 bg-white p-4 dark:border-[#2b2b2b] dark:bg-[#1a1a1a]"
-                                                >
-                                                    <div className="mb-4 flex items-center justify-between">
-                                                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-[#8c909f]">
-                                                            Test Case{" "}
-                                                            {index + 1}
-                                                        </span>
+                                        <AnimatePresence initial={false}>
+                                            {testCases.map(
+                                                (testCase, index) => (
+                                                    <motion.div
+                                                        key={index}
+                                                        initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, height: "auto", scale: 1 }}
+                                                        exit={{ opacity: 0, height: 0, scale: 0.95, margin: 0, overflow: "hidden" }}
+                                                        transition={{ opacity: { duration: 0.2 }, layout: { type: "spring", bounce: 0, duration: 0.4 } }}
+                                                        className="rounded-xl border border-slate-200 bg-white p-4 dark:border-[#2b2b2b] dark:bg-[#1a1a1a]"
+                                                    >
+                                                        <div className="mb-4 flex items-center justify-between">
+                                                            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-[#8c909f]">
+                                                                Test Case{" "}
+                                                                {index + 1}
+                                                            </span>
 
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                removeTestCase(
-                                                                    index
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                testCases.length <=
-                                                                1
-                                                            }
-                                                            className="text-slate-400 hover:text-red-500 disabled:opacity-30"
-                                                        >
-                                                            <Icon
-                                                                name="trash"
-                                                                className="h-4 w-4"
-                                                            />
-                                                        </button>
-                                                    </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeTestCase(
+                                                                        index
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    testCases.length <=
+                                                                    1
+                                                                }
+                                                                className="text-slate-400 hover:text-red-500 disabled:opacity-30 btn-tactile cursor-pointer"
+                                                            >
+                                                                <Icon
+                                                                    name="trash"
+                                                                    className="h-4 w-4"
+                                                                />
+                                                            </button>
+                                                        </div>
 
                                                     <div className="grid gap-4 sm:grid-cols-2">
                                                         <textarea
@@ -1033,9 +1045,10 @@ export default function CreateQuestion() {
                                                             className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-900 outline-none focus:border-blue-500 dark:border-[#2b2b2b] dark:bg-[#171717] dark:text-[#e5e2e1]"
                                                         />
                                                     </div>
-                                                </div>
+                                                </motion.div>
                                             )
                                         )}
+                                        </AnimatePresence>
 
                                         {fieldErrors.test_cases && (
                                             <p className="text-xs text-red-500">

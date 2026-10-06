@@ -133,12 +133,15 @@ function Icon({ name, className = "w-5 h-5" }) {
 
 function Toggle({ checked, onChange, label, description }) {
     return (
-        <label className="flex items-center justify-between gap-5 py-3.5 cursor-pointer group">
-            <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <div 
+            onClick={onChange}
+            className="flex items-center justify-between gap-5 py-3 cursor-pointer group select-none"
+        >
+            <div className="min-w-0 pr-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                     {label}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                     {description}
                 </p>
             </div>
@@ -147,22 +150,25 @@ function Toggle({ checked, onChange, label, description }) {
                 type="button"
                 role="switch"
                 aria-checked={checked}
-                onClick={onChange}
-                className={`relative shrink-0 w-10 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
+                onClick={(e) => {
+                    e.stopPropagation()
+                    onChange()
+                }}
+                className={`relative inline-flex shrink-0 h-5 w-9 p-0.5 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer ${
                     checked
-                        ? "bg-blue-600 dark:bg-blue-500"
-                        : "bg-slate-300 dark:bg-slate-700"
+                        ? "bg-blue-600 dark:bg-blue-600"
+                        : "bg-slate-300 dark:bg-[#3A3F47]"
                 }`}
             >
                 <span
-                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${
                         checked
-                            ? "translate-x-5"
-                            : "translate-x-1"
+                            ? "translate-x-4"
+                            : "translate-x-0"
                     }`}
                 />
             </button>
-        </label>
+        </div>
     )
 }
 
@@ -320,7 +326,7 @@ export default function CreateQuiz() {
                         <button
                             type="button"
                             onClick={() => navigate("/dashboard")}
-                            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                         >
                             Teacher Dashboard
                         </button>
@@ -334,7 +340,7 @@ export default function CreateQuiz() {
 
                     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                                 Create Quiz
                             </h1>
 
@@ -343,16 +349,16 @@ export default function CreateQuiz() {
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#242424] border border-slate-200 dark:border-[#333333] rounded-full px-3 py-1.5 w-fit">
-                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[9px]">
+                        {/* Progress Indicator */}
+                        <div className="flex items-center gap-2.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-full px-3.5 py-1.5 shadow-sm w-fit">
+                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-bold">
                                 1
                             </span>
-                            <span>Basic Setup</span>
-                            <span className="text-slate-300 dark:text-slate-600">
+                            <span className="text-slate-900 dark:text-white font-medium">Basic Setup</span>
+                            <span className="text-slate-300 dark:text-slate-700 font-normal">
                                 /
                             </span>
-                            <span>2</span>
-                            <span>Add Questions</span>
+                            <span className="text-slate-400 dark:text-slate-500 font-normal">2 Add Questions</span>
                         </div>
                     </div>
                 </div>
@@ -379,248 +385,248 @@ export default function CreateQuiz() {
                         <div className="space-y-5">
 
                             {/* Basic Information */}
-                            <section className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-xl overflow-hidden">
-                                <div className="px-5 sm:px-6 py-5 border-b border-slate-200 dark:border-[#303030]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                                            <Icon name="quiz" className="w-4 h-4" />
-                                        </div>
+                            <section className="bg-white dark:bg-[#141518] border border-slate-300/90 dark:border-slate-800 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-none">
+                                <div className="px-5 sm:px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                                             <Icon name="quiz" className="w-4 h-4" />
+                                         </div>
 
-                                        <div>
-                                            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                                                Basic Information
-                                            </h2>
+                                         <div>
+                                             <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                                                 Basic Information
+                                             </h2>
 
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                                Essential details used to identify this quiz.
-                                            </p>
-                                        </div>
-                                    </div>
+                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                 Essential details used to identify this quiz.
+                                             </p>
+                                         </div>
+                                     </div>
                                 </div>
 
                                 <div className="p-5 sm:p-6 space-y-5">
 
-                                    {/* Title */}
-                                    <div>
-                                        <FieldLabel required>
-                                            Quiz Title
-                                        </FieldLabel>
+                                     {/* Title */}
+                                     <div>
+                                         <FieldLabel required>
+                                             Quiz Title
+                                         </FieldLabel>
 
-                                        <input
-                                            type="text"
-                                            value={form.title}
-                                            maxLength={200}
-                                            onChange={(event) =>
-                                                updateField(
-                                                    "title",
-                                                    event.target.value
-                                                )
-                                            }
-                                            placeholder="e.g. Data Structures & Algorithms Mid-Term"
-                                            className={`w-full h-11 px-3.5 rounded-lg border bg-slate-50 dark:bg-[#242424] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all ${
-                                                fieldErrors.title
-                                                    ? "border-red-400 dark:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                                                    : "border-slate-200 dark:border-[#373737] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                            }`}
-                                        />
+                                         <input
+                                             type="text"
+                                             value={form.title}
+                                             maxLength={200}
+                                             onChange={(event) =>
+                                                 updateField(
+                                                     "title",
+                                                     event.target.value
+                                                 )
+                                             }
+                                             placeholder="e.g. Data Structures & Algorithms Mid-Term"
+                                             className={`w-full h-11 px-3.5 rounded-lg border bg-slate-50/70 dark:bg-[#2A2D35] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none transition-all ${
+                                                 fieldErrors.title
+                                                     ? "border-red-400 dark:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                                                     : "border-slate-300/80 dark:border-[#3A3F47] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                             }`}
+                                         />
 
-                                        <div className="flex justify-between mt-1.5">
-                                            {fieldErrors.title ? (
-                                                <span className="text-xs text-red-500">
-                                                    {fieldErrors.title}
-                                                </span>
-                                            ) : (
-                                                <span />
-                                            )}
+                                         <div className="flex justify-between mt-1.5">
+                                             {fieldErrors.title ? (
+                                                 <span className="text-xs text-red-500">
+                                                     {fieldErrors.title}
+                                                 </span>
+                                             ) : (
+                                                 <span />
+                                             )}
 
-                                            <span className="text-[10px] text-slate-400">
-                                                {form.title.length}/200
-                                            </span>
-                                        </div>
-                                    </div>
+                                             <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                                 {form.title.length}/200
+                                             </span>
+                                         </div>
+                                     </div>
 
-                                    {/* Subject + Duration */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                     {/* Subject + Duration - 70% / 30% Structural Proportions */}
+                                     <div className="grid grid-cols-1 md:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-5">
 
-                                        <div>
-                                            <FieldLabel required>
-                                                Subject / Course
-                                            </FieldLabel>
+                                         <div>
+                                             <FieldLabel required>
+                                                 Subject / Course
+                                             </FieldLabel>
 
-                                            <input
-                                                type="text"
-                                                value={form.subject}
-                                                maxLength={100}
-                                                onChange={(event) =>
-                                                    updateField(
-                                                        "subject",
-                                                        event.target.value
-                                                    )
-                                                }
-                                                placeholder="e.g. CS-302: Advanced Algorithms"
-                                                className={`w-full h-11 px-3.5 rounded-lg border bg-slate-50 dark:bg-[#242424] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all ${
-                                                    fieldErrors.subject
-                                                        ? "border-red-400 dark:border-red-500"
-                                                        : "border-slate-200 dark:border-[#373737] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                }`}
-                                            />
+                                             <input
+                                                 type="text"
+                                                 value={form.subject}
+                                                 maxLength={100}
+                                                 onChange={(event) =>
+                                                     updateField(
+                                                         "subject",
+                                                         event.target.value
+                                                     )
+                                                 }
+                                                 placeholder="e.g. CS-302: Advanced Algorithms"
+                                                 className={`w-full h-11 px-3.5 rounded-lg border bg-slate-50/70 dark:bg-[#2A2D35] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none transition-all ${
+                                                     fieldErrors.subject
+                                                         ? "border-red-400 dark:border-red-500"
+                                                         : "border-slate-300/80 dark:border-[#3A3F47] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                                 }`}
+                                             />
 
-                                            {fieldErrors.subject && (
-                                                <p className="text-xs text-red-500 mt-1.5">
-                                                    {fieldErrors.subject}
-                                                </p>
-                                            )}
-                                        </div>
+                                             {fieldErrors.subject && (
+                                                 <p className="text-xs text-red-500 mt-1.5">
+                                                     {fieldErrors.subject}
+                                                 </p>
+                                             )}
+                                         </div>
 
-                                        <div>
-                                            <FieldLabel required>
-                                                Duration
-                                            </FieldLabel>
+                                         <div>
+                                             <FieldLabel required>
+                                                 Duration
+                                             </FieldLabel>
 
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={form.duration_minutes}
-                                                    onChange={(event) =>
-                                                        updateField(
-                                                            "duration_minutes",
-                                                            event.target.value
-                                                        )
-                                                    }
-                                                    placeholder="90"
-                                                    className={`w-full h-11 px-3.5 pr-16 rounded-lg border bg-slate-50 dark:bg-[#242424] text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all ${
-                                                        fieldErrors.duration_minutes
-                                                            ? "border-red-400 dark:border-red-500"
-                                                            : "border-slate-200 dark:border-[#373737] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                    }`}
-                                                />
+                                             <div className="relative">
+                                                 <input
+                                                     type="number"
+                                                     min="1"
+                                                     value={form.duration_minutes}
+                                                     onChange={(event) =>
+                                                         updateField(
+                                                             "duration_minutes",
+                                                             event.target.value
+                                                         )
+                                                     }
+                                                     placeholder="90"
+                                                     className={`w-full h-11 px-3.5 pr-14 rounded-lg border bg-slate-50/70 dark:bg-[#2A2D35] text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none transition-all ${
+                                                         fieldErrors.duration_minutes
+                                                             ? "border-red-400 dark:border-red-500"
+                                                             : "border-slate-300/80 dark:border-[#3A3F47] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                                     }`}
+                                                 />
 
-                                                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-medium text-slate-400">
-                                                    MIN
-                                                </span>
-                                            </div>
+                                                 <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 dark:text-slate-400 pointer-events-none">
+                                                     MIN
+                                                 </span>
+                                             </div>
 
-                                            {fieldErrors.duration_minutes && (
-                                                <p className="text-xs text-red-500 mt-1.5">
-                                                    {fieldErrors.duration_minutes}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
+                                             {fieldErrors.duration_minutes && (
+                                                 <p className="text-xs text-red-500 mt-1.5">
+                                                     {fieldErrors.duration_minutes}
+                                                 </p>
+                                             )}
+                                         </div>
+                                     </div>
 
-                                    {/* Description */}
-                                    <div>
-                                        <FieldLabel optional>
-                                            Description
-                                        </FieldLabel>
+                                     {/* Description */}
+                                     <div>
+                                         <FieldLabel optional>
+                                             Description
+                                         </FieldLabel>
 
-                                        <textarea
-                                            rows={4}
-                                            value={form.description}
-                                            onChange={(event) =>
-                                                updateField(
-                                                    "description",
-                                                    event.target.value
-                                                )
-                                            }
-                                            placeholder="Add a short description or instructions for students..."
-                                            className="w-full px-3.5 py-3 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all resize-y min-h-[105px] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                        />
+                                         <textarea
+                                             rows={4}
+                                             value={form.description}
+                                             onChange={(event) =>
+                                                 updateField(
+                                                     "description",
+                                                     event.target.value
+                                                 )
+                                             }
+                                             placeholder="Add a short description or instructions for students..."
+                                             className="w-full px-3.5 py-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#2A2D35] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none transition-all resize-y min-h-[105px] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                         />
 
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-                                            This can be shown to students before they begin the assessment.
-                                        </p>
-                                    </div>
+                                         <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                                             This can be shown to students before they begin the assessment.
+                                         </p>
+                                     </div>
 
-                                    {/* Password + Attempts */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                                     {/* Password + Attempts */}
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
 
-                                        <div>
-                                            <FieldLabel optional>
-                                                Access Code / Password
-                                            </FieldLabel>
+                                         <div>
+                                             <FieldLabel optional>
+                                                 Access Code / Password
+                                             </FieldLabel>
 
-                                            <div className="relative">
-                                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                                                    <Icon
-                                                        name="lock"
-                                                        className="w-4 h-4"
-                                                    />
-                                                </span>
+                                             <div className="relative">
+                                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400">
+                                                     <Icon
+                                                         name="lock"
+                                                         className="w-4 h-4"
+                                                     />
+                                                 </span>
 
-                                                <input
-                                                    type="text"
-                                                    maxLength={128}
-                                                    value={form.password}
-                                                    onChange={(event) =>
-                                                        updateField(
-                                                            "password",
-                                                            event.target.value
-                                                        )
-                                                    }
-                                                    placeholder="Leave empty for open access"
-                                                    className="w-full h-11 pl-10 pr-3.5 rounded-lg border border-slate-200 dark:border-[#373737] bg-slate-50 dark:bg-[#242424] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none transition-all focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                />
-                                            </div>
+                                                 <input
+                                                     type="text"
+                                                     maxLength={128}
+                                                     value={form.password}
+                                                     onChange={(event) =>
+                                                         updateField(
+                                                             "password",
+                                                             event.target.value
+                                                         )
+                                                     }
+                                                     placeholder="Leave empty for open access"
+                                                     className="w-full h-11 pl-10 pr-3.5 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-slate-50/70 dark:bg-[#2A2D35] text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none transition-all focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                                 />
+                                             </div>
 
-                                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-                                                Students will need this code to enter the quiz.
-                                            </p>
-                                        </div>
+                                             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                                                 Students will need this code to enter the quiz.
+                                             </p>
+                                         </div>
 
-                                        <div>
-                                            <FieldLabel required>
-                                                Maximum Attempts
-                                            </FieldLabel>
+                                         <div>
+                                             <FieldLabel required>
+                                                 Maximum Attempts
+                                             </FieldLabel>
 
-                                            <div className="relative">
-                                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-                                                    <Icon
-                                                        name="attempts"
-                                                        className="w-4 h-4"
-                                                    />
-                                                </span>
+                                             <div className="relative">
+                                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400">
+                                                     <Icon
+                                                         name="attempts"
+                                                         className="w-4 h-4"
+                                                     />
+                                                 </span>
 
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={form.max_attempts}
-                                                    onChange={(event) =>
-                                                        updateField(
-                                                            "max_attempts",
-                                                            event.target.value
-                                                        )
-                                                    }
-                                                    className={`w-full h-11 pl-10 pr-3.5 rounded-lg border bg-slate-50 dark:bg-[#242424] text-sm font-medium text-slate-900 dark:text-white outline-none transition-all ${
-                                                        fieldErrors.max_attempts
-                                                            ? "border-red-400 dark:border-red-500"
-                                                            : "border-slate-200 dark:border-[#373737] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                    }`}
-                                                />
-                                            </div>
+                                                 <input
+                                                     type="number"
+                                                     min="1"
+                                                     value={form.max_attempts}
+                                                     onChange={(event) =>
+                                                         updateField(
+                                                             "max_attempts",
+                                                             event.target.value
+                                                         )
+                                                     }
+                                                     className={`w-full h-11 pl-10 pr-3.5 rounded-lg border bg-slate-50/70 dark:bg-[#2A2D35] text-sm font-medium text-slate-900 dark:text-white outline-none transition-all ${
+                                                         fieldErrors.max_attempts
+                                                             ? "border-red-400 dark:border-red-500"
+                                                             : "border-slate-300/80 dark:border-[#3A3F47] focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                                                     }`}
+                                                 />
+                                             </div>
 
-                                            {fieldErrors.max_attempts && (
-                                                <p className="text-xs text-red-500 mt-1.5">
-                                                    {fieldErrors.max_attempts}
-                                                </p>
-                                            )}
+                                             {fieldErrors.max_attempts && (
+                                                 <p className="text-xs text-red-500 mt-1.5">
+                                                     {fieldErrors.max_attempts}
+                                                 </p>
+                                             )}
 
-                                            {!fieldErrors.max_attempts && (
-                                                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-                                                    How many times a student can attempt this quiz.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
+                                             {!fieldErrors.max_attempts && (
+                                                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                                                     How many times a student can attempt this quiz.
+                                                 </p>
+                                             )}
+                                         </div>
+                                     </div>
                                 </div>
                             </section>
 
                             {/* Quiz Settings */}
-                            <section className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-xl overflow-hidden">
-                                <div className="px-5 sm:px-6 py-5 border-b border-slate-200 dark:border-[#303030]">
+                            <section className="bg-white dark:bg-[#141518] border border-slate-300/90 dark:border-slate-800 rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-none">
+                                <div className="px-5 sm:px-6 py-5 border-b border-slate-200 dark:border-slate-800">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#292929] text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
                                             <Icon
                                                 name="shuffle"
                                                 className="w-4 h-4"
@@ -629,7 +635,7 @@ export default function CreateQuiz() {
 
                                         <div>
                                             <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                                                Quiz Settings
+                                                 Quiz Settings
                                             </h2>
 
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -639,7 +645,7 @@ export default function CreateQuiz() {
                                     </div>
                                 </div>
 
-                                <div className="px-5 sm:px-6 divide-y divide-slate-100 dark:divide-[#303030]">
+                                <div className="px-5 sm:px-6 divide-y divide-slate-100 dark:divide-slate-800">
                                     <Toggle
                                         checked={form.review_enabled}
                                         onChange={() =>
@@ -679,7 +685,7 @@ export default function CreateQuiz() {
                             </section>
 
                             {/* Scheduling Notice */}
-                            <div className="flex items-start gap-3.5 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-4 py-4">
+                            <div className="flex items-start gap-3.5 rounded-xl border border-blue-200/80 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-4 py-4">
                                 <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                                     <Icon
                                         name="clock"
@@ -702,8 +708,8 @@ export default function CreateQuiz() {
                         {/* Right Summary */}
                         <aside className="xl:sticky xl:top-20 h-fit space-y-4">
 
-                            <div className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#303030] rounded-xl overflow-hidden">
-                                <div className="px-5 py-4 border-b border-slate-200 dark:border-[#303030] flex items-center justify-between gap-3">
+                            <div className="bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                                <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
                                         <Icon
                                             name="quiz"
@@ -715,7 +721,7 @@ export default function CreateQuiz() {
                                         </h3>
                                     </div>
 
-                                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 dark:bg-[#292929] text-slate-500 dark:text-slate-400">
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-slate-700">
                                         DRAFT
                                     </span>
                                 </div>
@@ -727,7 +733,7 @@ export default function CreateQuiz() {
                                         </p>
 
                                         <p className="text-sm font-semibold text-slate-900 dark:text-white break-words">
-                                            {form.title || "Untitled Quiz"}
+                                            {form.title || <span className="text-slate-400 dark:text-slate-500 font-normal italic">Untitled Quiz</span>}
                                         </p>
                                     </div>
 
@@ -739,7 +745,7 @@ export default function CreateQuiz() {
                                             </span>
 
                                             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 text-right max-w-[170px] truncate">
-                                                {form.subject || "Not set"}
+                                                {form.subject || <span className="text-slate-400 dark:text-slate-500 font-normal">Not set</span>}
                                             </span>
                                         </div>
 
@@ -755,7 +761,7 @@ export default function CreateQuiz() {
                                             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                                                 {form.duration_minutes
                                                     ? `${form.duration_minutes} min`
-                                                    : "Not set"}
+                                                    : <span className="text-slate-400 dark:text-slate-500 font-normal">Not set</span>}
                                             </span>
                                         </div>
 
@@ -769,7 +775,7 @@ export default function CreateQuiz() {
                                             </span>
 
                                             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                                {form.max_attempts || "Not set"}
+                                                {form.max_attempts || <span className="text-slate-400 dark:text-slate-500 font-normal">Not set</span>}
                                             </span>
                                         </div>
 
@@ -788,7 +794,7 @@ export default function CreateQuiz() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-5 pt-4 border-t border-slate-100 dark:border-[#303030]">
+                                    <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
                                         <div className="flex items-start gap-2.5">
                                             <Icon
                                                 name="check"
@@ -804,14 +810,14 @@ export default function CreateQuiz() {
                             </div>
 
                             {/* Engine status */}
-                            <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/15 px-4 py-3.5">
+                            <div className="rounded-xl border border-slate-300/80 dark:border-slate-800 bg-slate-50/70 dark:bg-[#141518] px-4 py-3.5 shadow-sm">
                                 <div className="flex items-center gap-2.5">
-                                    <span className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center">
+                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                                     </span>
 
                                     <div>
-                                        <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                                        <p className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
                                             Assessment Engine
                                         </p>
 
@@ -824,13 +830,13 @@ export default function CreateQuiz() {
                         </aside>
                     </div>
 
-                    {/* Bottom Actions */}
-                    <div className="mt-7 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-4">
+                    {/* Bottom Actions - Grouped together on the right */}
+                    <div className="mt-8 pt-5 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-end gap-3">
                         <button
                             type="button"
                             onClick={() => navigate("/dashboard")}
                             disabled={loading}
-                            className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#292929] transition-colors disabled:opacity-50"
+                            className="cursor-pointer inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2A2D35] border border-slate-300/80 dark:border-[#3A3F47] transition-all disabled:opacity-50"
                         >
                             <Icon
                                 name="back"
@@ -842,7 +848,7 @@ export default function CreateQuiz() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="inline-flex items-center justify-center gap-2 h-11 px-5 sm:px-6 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white text-sm font-semibold shadow-sm shadow-blue-600/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]"
+                            className="cursor-pointer inline-flex items-center justify-center gap-2 h-10 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white text-sm font-semibold shadow-sm shadow-blue-600/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]"
                         >
                             {loading ? (
                                 <>

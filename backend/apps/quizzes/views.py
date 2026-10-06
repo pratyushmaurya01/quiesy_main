@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.utils import timezone
 from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models import Q
@@ -522,33 +523,147 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=["post"],
-        url_path="toggle-review",
+        methods=["get"],
+        url_path="live-proctor",
     )
-    def toggle_review(self, request, pk=None):
+    def live_proctor(self, request, pk=None):
         """
-        Toggle whether students can view answers and solutions after submitting.
+        Fetch real-time roster of candidates for the live exam proctoring cockpit.
         """
+        from apps.students.models import ExamAttempt
         quiz = self.get_object()
-        review_on = request.data.get("review_on")
 
-        if review_on is None:
-            quiz.review_enabled = not quiz.review_enabled
-        else:
-            quiz.review_enabled = bool(review_on)
-
-        quiz.save(update_fields=["review_enabled", "updated_at"])
-
-        return Response(
-            {
-                "id": quiz.id,
-                "review_enabled": quiz.review_enabled,
-                "detail": f"Review is now {'enabled' if quiz.review_enabled else 'disabled'}.",
-            },
-            status=status.HTTP_200_OK,
+        attempts = (
+            ExamAttempt.objects
+            .filter(quiz=quiz)
+            .select_related("student")
+            .prefetch_related("answers")
+            .order_by("-started_at")
         )
 
+        total_questions = quiz.quiz_questions.count()
+        quiz_max_score = float(
+            sum(
+                qq.marks_override if qq.marks_override is not None else qq.question.marks
+                for qq in quiz.quiz_questions.select_related("question")
+            )
+        )
 
+        candidates = []
+        now = timezone.now()
+        active_count = 0
+        blocked_count = 0
+        total_switches = 0
+
+        for att in attempts:
+            answered = att.answers.filter(status__in=["ANSWERED", "EVALUATED"]).count()
+            switches = att.tab_switch_count
+            total_switches += switches
+
+            if att.is_blocked:
+                blocked_count += 1
+            elif att.status == ExamAttempt.Status.IN_PROGRESS:
+                active_count += 1
+
+            # Seconds remaining calculation
+            if att.is_blocked and att.paused_seconds_remaining is not None:
+                secs_left = att.paused_seconds_remaining
+            elif att.expires_at:
+                secs_left = max(0, int((att.expires_at - now).total_seconds()))
+            else:
+                secs_left = 0
+
+            student_name = getattr(att.student, "name", "")
+            if not student_name:
+                student_name = att.student.email.split("@")[0]
+
+            candidates.append({
+                "attempt_id": str(att.id),
+                "student_id": att.student.id,
+                "student_name": student_name,
+                "email": att.student.email,
+                "status": att.status,
+                "is_blocked": att.is_blocked,
+                "blocked_at": att.blocked_at.isoformat() if att.blocked_at else None,
+                "tab_switch_count": switches,
+                "score": float(att.score or 0),
+                "max_score": quiz_max_score,
+                "answered_count": answered,
+                "total_questions": total_questions,
+                "seconds_left": secs_left,
+                "started_at": att.started_at.isoformat() if att.started_at else None,
+                "joined_at": att.started_at.isoformat() if att.started_at else None,
+            })
+
+        total_enrolled = len(candidates)
+        avg_switches = round(total_switches / total_enrolled, 1) if total_enrolled > 0 else 0
+
+        return Response({
+            "quiz_id": quiz.id,
+            "quiz_title": quiz.title,
+            "subject": quiz.subject,
+            "quiz_code": quiz.quiz_code,
+            "status": quiz.status,
+            "total_questions": total_questions,
+            "quiz_max_score": quiz_max_score,
+            "stats": {
+                "total_online": total_enrolled,
+                "currently_active": active_count,
+                "currently_blocked": blocked_count,
+                "avg_tab_switches": avg_switches,
+            },
+            "candidates": candidates,
+        }, status=status.HTTP_200_OK)
+
+
+
+    @action(
+        detail=True,
+        methods=["put"],
+        url_path="sync-questions",
+    )
+    def sync_questions(self, request, pk=None):
+        """
+        Bulk sync questions for a quiz. Handles additions, deletions, and reordering.
+        Expected payload: {"questions": [{"question_id": 1, "order": 0, "marks_override": null}, ...]}
+        """
+        from django.db import transaction
+        quiz = self.get_object()
+        
+        questions_data = request.data.get("questions", [])
+        if not isinstance(questions_data, list):
+            return Response({"detail": "Invalid payload. 'questions' must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            with transaction.atomic():
+                # Get the existing questions mapped to this quiz
+                existing_mappings = QuizQuestion.objects.filter(quiz=quiz)
+                
+                # Delete all existing mappings (clean slate) - optimized diffing can be done, but this is safest and fastest for typical sizes
+                existing_mappings.delete()
+                
+                new_mappings = []
+                for idx, q_data in enumerate(questions_data):
+                    question_id = q_data.get("question_id")
+                    if not question_id:
+                        continue
+                    
+                    order = q_data.get("order", idx)
+                    marks_override = q_data.get("marks_override", None)
+                    
+                    new_mappings.append(QuizQuestion(
+                        quiz=quiz,
+                        question_id=question_id,
+                        order=order,
+                        marks_override=marks_override
+                    ))
+                
+                # Bulk create the new mappings in the specified order
+                QuizQuestion.objects.bulk_create(new_mappings)
+                
+            return Response({"detail": "Questions synced successfully", "count": len(new_mappings)}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class QuizQuestionViewSet(viewsets.ModelViewSet):
     """

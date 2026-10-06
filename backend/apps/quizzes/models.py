@@ -206,8 +206,14 @@ class Quiz(models.Model):
     shuffle_options = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["teacher", "status"], name="quiz_teacher_st"),
+            models.Index(fields=["status", "starts_at", "ends_at"], name="quiz_st_dates"),
+            models.Index(fields=["quiz_code"], name="quiz_code_idx"),
+        ]
 
     def __str__(self):
         return self.title
@@ -245,6 +251,11 @@ class QuizQuestion(models.Model):
                 name="unique_question_in_quiz",
             )
         ]
+        indexes = [
+            models.Index(fields=["quiz", "order"], name="quiz_q_order"),
+            models.Index(fields=["quiz", "question"], name="quiz_q_composite"),
+        ]
 
     def __str__(self):
         return f"{self.quiz.title} - {self.question_id}"
+

@@ -57,6 +57,11 @@ export const submitCode = (data) => {
     return API.post("student/submit-code/", data)
 }
 
+export const getCodeTaskStatus = (taskId) => {
+    return API.get(`student/code-tasks/${taskId}/`)
+}
+
+
 
 
 

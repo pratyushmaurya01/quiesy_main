@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 
 import API from "../../api/api"
+import TeacherShell from "../../components/layout/TeacherShell"
 import {
     getQuiz,
     scheduleQuiz,
@@ -10,6 +12,15 @@ import {
     getQuestion,
     updateQuestion,
 } from "../../api/quizzes"
+
+function formatQuizTitle(title) {
+    if (!title) return "Edit Quiz"
+    return title
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ")
+}
+
 
 
 function formatDateTimeLocal(value) {
@@ -97,106 +108,99 @@ export default function EditQuiz() {
     const [lifecycleSuccess, setLifecycleSuccess] = useState("")
 
 
-    // ---------------------------------------------------------
-    // Fetch quiz
-    // ---------------------------------------------------------
-
-    const fetchQuiz = async () => {
-        try {
-            const response = await getQuiz(quizId)
-
-            setQuiz(response.data)
-
-            setStartsAt(
-                formatDateTimeLocal(
-                    response.data.starts_at
-                )
-            )
-
-            setEndsAt(
-                formatDateTimeLocal(
-                    response.data.ends_at
-                )
-            )
-        } catch (error) {
-            console.error("Failed to fetch quiz:", error)
-
-            setPageError(
-                getErrorMessage(
-                    error,
-                    "Failed to load quiz."
-                )
-            )
-        }
-    }
-
-
-    // ---------------------------------------------------------
-    // Existing question fetching
-    // ---------------------------------------------------------
-
-    const fetchQuestions = async () => {
-        setIsLoading(true)
-
-        try {
-            // First try modern apps.quizzes quiz questions
-            const quizQuestionsResponse = await getQuizQuestions()
-            const quizItems = (quizQuestionsResponse.data || [])
-                .filter((item) => String(item.quiz) === String(quizId))
-                .sort((a, b) => (a.order || 0) - (b.order || 0) || a.id - b.id)
-
-            if (quizItems.length > 0) {
-                const enriched = await Promise.all(
-                    quizItems.map(async (item) => {
-                        try {
-                            const questionResponse = await getQuestion(item.question)
-                            return {
-                                ...questionResponse.data,
-                                quiz_question_id: item.id,
-                                marks: item.marks_override ?? questionResponse.data.marks,
-                            }
-                        } catch (e) {
-                            return null
-                        }
-                    })
-                )
-                setQuestions(enriched.filter(Boolean))
-            } else {
-                // Fallback to legacy quiz questions endpoint if not using modern quiz_questions
-                try {
-                    const response = await API.get(`../quiz/${quizId}/questions-list/`)
-                    setQuestions(response.data || [])
-                } catch {
-                    setQuestions([])
-                }
-            }
-        } catch (error) {
-            console.error(
-                "Failed to fetch questions:",
-                error
-            )
-
-            setPageError(
-                "Failed to load quiz questions."
-            )
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
+    const queryClient = useQueryClient()
 
     useEffect(() => {
+        let active = true
+
         const loadPage = async () => {
             setPageError("")
+            setIsLoading(true)
 
-            await Promise.all([
-                fetchQuiz(),
-                fetchQuestions(),
-            ])
+            try {
+                // Fetch Quiz
+                const quizResponse = await queryClient.fetchQuery({
+                    queryKey: ['quiz', quizId],
+                    queryFn: async () => {
+                        const response = await getQuiz(quizId)
+                        return response.data
+                    },
+                    staleTime: 1000 * 60 * 5
+                })
+
+                if (active) {
+                    setQuiz(quizResponse)
+                    setStartsAt(formatDateTimeLocal(quizResponse.starts_at))
+                    setEndsAt(formatDateTimeLocal(quizResponse.ends_at))
+                }
+
+                // Fetch Questions
+                const quizQuestionsResponse = await queryClient.fetchQuery({
+                    queryKey: ['quizQuestions'],
+                    queryFn: async () => {
+                        const res = await getQuizQuestions()
+                        return res.data || []
+                    },
+                    staleTime: 1000 * 60 * 5
+                })
+
+                const quizItems = quizQuestionsResponse
+                    .filter((item) => String(item.quiz) === String(quizId))
+                    .sort((a, b) => (a.order || 0) - (b.order || 0) || a.id - b.id)
+
+                if (quizItems.length > 0) {
+                    const enriched = await Promise.all(
+                        quizItems.map(async (item) => {
+                            try {
+                                const questionData = await queryClient.fetchQuery({
+                                    queryKey: ['questionDetails', item.question],
+                                    queryFn: async () => {
+                                        const res = await getQuestion(item.question)
+                                        return res.data
+                                    },
+                                    staleTime: 1000 * 60 * 5
+                                })
+                                return {
+                                    ...questionData,
+                                    quiz_question_id: item.id,
+                                    marks: item.marks_override ?? questionData.marks,
+                                }
+                            } catch (e) {
+                                return null
+                            }
+                        })
+                    )
+                    if (active) setQuestions(enriched.filter(Boolean))
+                } else {
+                    // Fallback
+                    try {
+                        const response = await queryClient.fetchQuery({
+                            queryKey: ['legacyQuizQuestions', quizId],
+                            queryFn: async () => {
+                                const res = await API.get(`../quiz/${quizId}/questions-list/`)
+                                return res.data || []
+                            },
+                            staleTime: 1000 * 60 * 5
+                        })
+                        if (active) setQuestions(response)
+                    } catch {
+                        if (active) setQuestions([])
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load page:", error)
+                if (active) {
+                    setPageError(getErrorMessage(error, "Failed to load quiz data."))
+                }
+            } finally {
+                if (active) setIsLoading(false)
+            }
         }
 
         loadPage()
-    }, [quizId])
+
+        return () => { active = false }
+    }, [quizId, queryClient])
 
 
     // ---------------------------------------------------------
@@ -505,59 +509,37 @@ export default function EditQuiz() {
     // ---------------------------------------------------------
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 font-sans text-slate-900 dark:text-slate-100">
-
-            <div className="max-w-5xl mx-auto">
+        <TeacherShell
+            breadcrumbs={[
+                { label: "Quizzes", to: "/dashboard" },
+                { label: formatQuizTitle(quiz?.title), to: `/edit-quiz/${quizId}` },
+                { label: "Edit" },
+            ]}
+        >
+            <div className="w-full max-w-5xl mx-auto pb-16 text-slate-900 dark:text-slate-100">
 
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-
-                    <div>
-                        <div className="flex items-center gap-2 text-xs font-medium text-slate-400 dark:text-slate-500 mb-3">
-                            <Link
-                                to="/dashboard"
-                                className="hover:text-blue-600 dark:hover:text-blue-400"
-                            >
-                                Teacher Dashboard
-                            </Link>
-
-                            <span>/</span>
-
-                            <span className="text-slate-600 dark:text-slate-300">
-                                Edit Quiz
-                            </span>
-                        </div>
-
-                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-                            {quiz?.title || "Edit Quiz"}
-                        </h1>
-
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            Manage quiz status, schedule, and questions.
-                        </p>
-                    </div>
-
-                    <Link
-                        to="/dashboard"
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 shadow-sm transition-all"
-                    >
-                        <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
+                <div className="pt-2 sm:pt-4 mb-6 pb-6 border-b border-slate-200/80 dark:border-slate-800">
+                    <nav className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium mb-2">
+                        <Link
+                            to="/dashboard"
+                            className="hover:text-blue-600 dark:hover:text-blue-400"
                         >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                            />
-                        </svg>
+                            Teacher Dashboard
+                        </Link>
+                        <span>/</span>
+                        <span className="text-slate-600 dark:text-slate-300">
+                            Edit Quiz
+                        </span>
+                    </nav>
 
-                        Back to Dashboard
-                    </Link>
+                    <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                        {formatQuizTitle(quiz?.title)}
+                    </h1>
 
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Manage quiz status, schedule, and questions.
+                    </p>
                 </div>
 
 
@@ -574,9 +556,9 @@ export default function EditQuiz() {
                 ================================================== */}
 
                 {quiz && (
-                    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 overflow-hidden">
+                    <section className="bg-white dark:bg-[#141518] rounded-xl border border-slate-300/80 dark:border-slate-800 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none mb-6 overflow-hidden">
 
-                        <div className="px-5 sm:px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+                        <div className="px-5 sm:px-6 py-4 border-b border-slate-200/80 dark:border-slate-800">
 
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
@@ -585,13 +567,13 @@ export default function EditQuiz() {
                                         Quiz Status
                                     </h2>
 
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                         Control when students can access this quiz.
                                     </p>
                                 </div>
 
                                 <span
-                                    className={`inline-flex w-fit items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusClass}`}
+                                    className={`inline-flex w-fit items-center px-3 py-1 rounded-full text-xs font-semibold ${statusClass}`}
                                 >
                                     {statusLabel}
                                 </span>
@@ -608,7 +590,7 @@ export default function EditQuiz() {
                                 <div className="space-y-5">
 
                                     {/* Schedule */}
-                                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4 sm:p-5">
+                                    <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#1A1D24]/70 p-4 sm:p-5">
 
                                         <div className="mb-4">
 
@@ -626,53 +608,80 @@ export default function EditQuiz() {
                                         </div>
 
 
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                                             <div>
-                                                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
+                                                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
                                                     Start Date & Time
                                                 </label>
 
-                                                <input
-                                                    type="datetime-local"
-                                                    value={startsAt}
-                                                    onChange={(event) =>
-                                                        setStartsAt(
-                                                            event.target.value
-                                                        )
-                                                    }
-                                                    className="w-full h-11 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                />
+                                                <div className="relative">
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={startsAt}
+                                                        onChange={(event) =>
+                                                            setStartsAt(
+                                                                event.target.value
+                                                            )
+                                                        }
+                                                        className="w-full h-10 px-3.5 pr-10 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-white dark:bg-[#1E2128] text-xs sm:text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-colors cursor-pointer"
+                                                    />
+                                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
                                             </div>
 
 
                                             <div>
-                                                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
+                                                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
                                                     End Date & Time
                                                 </label>
 
-                                                <input
-                                                    type="datetime-local"
-                                                    value={endsAt}
-                                                    onChange={(event) =>
-                                                        setEndsAt(
-                                                            event.target.value
-                                                        )
-                                                    }
-                                                    className="w-full h-11 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                                                />
+                                                <div className="relative">
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={endsAt}
+                                                        onChange={(event) =>
+                                                            setEndsAt(
+                                                                event.target.value
+                                                            )
+                                                        }
+                                                        className="w-full h-10 px-3.5 pr-10 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-white dark:bg-[#1E2128] text-xs sm:text-sm text-slate-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-colors cursor-pointer"
+                                                    />
+                                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                         </div>
 
 
-                                        <div className="flex flex-col sm:flex-row gap-3 mt-5">
+                                        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 mt-5 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+
+                                            <button
+                                                type="button"
+                                                onClick={handleStartNow}
+                                                disabled={
+                                                    isLifecycleLoading ||
+                                                    questions.length === 0
+                                                }
+                                                className="inline-flex items-center justify-center h-10 px-4 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-white dark:bg-[#181A20] hover:bg-slate-50 dark:hover:bg-[#252830] disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+                                            >
+                                                Start Now
+                                            </button>
 
                                             <button
                                                 type="button"
                                                 onClick={handleSchedule}
                                                 disabled={isLifecycleLoading}
-                                                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                                                className="inline-flex items-center justify-center h-10 px-5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition-all shadow-sm cursor-pointer"
                                             >
                                                 {isLifecycleLoading
                                                     ? "Saving..."
@@ -682,27 +691,15 @@ export default function EditQuiz() {
                                                 }
                                             </button>
 
-
-                                            <button
-                                                type="button"
-                                                onClick={handleStartNow}
-                                                disabled={
-                                                    isLifecycleLoading ||
-                                                    questions.length === 0
-                                                }
-                                                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors"
-                                            >
-                                                Start Now
-                                            </button>
-
                                         </div>
 
 
                                         {questions.length === 0 && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">
+                                            <p className="text-right text-xs text-amber-600 dark:text-amber-400 mt-2">
                                                 Add at least one question before starting the quiz.
                                             </p>
                                         )}
+
 
                                     </div>
 
@@ -752,7 +749,7 @@ export default function EditQuiz() {
 
                             {/* Closed / Evaluated */}
                             {(status === "CLOSED" || status === "EVALUATED") && (
-                                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4">
+                                <div className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#1A1D24]/70 p-4">
 
                                     <p className="text-sm text-slate-600 dark:text-slate-300">
                                         This quiz is <strong>{statusLabel.toLowerCase()}</strong>. Lifecycle controls are no longer available here.
@@ -760,6 +757,7 @@ export default function EditQuiz() {
 
                                 </div>
                             )}
+
 
 
                             {/* Feedback */}
@@ -815,7 +813,7 @@ export default function EditQuiz() {
 
 
                     {!isLoading && questions.length === 0 && (
-                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center shadow-sm">
+                        <div className="bg-white dark:bg-[#141518] border border-slate-300/80 dark:border-slate-800 rounded-xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
                             <p className="text-slate-500 dark:text-slate-400 mb-4">
                                 No questions found for this quiz. Add questions to start the quiz.
                             </p>
@@ -842,7 +840,7 @@ export default function EditQuiz() {
                     )}
 
 
-                    <div className="space-y-6">
+                    <div className="space-y-4">
 
                         {questions.map((question, index) => {
 
@@ -860,27 +858,28 @@ export default function EditQuiz() {
                                     }
                                     className={`
                                         bg-white
-                                        dark:bg-slate-900
-                                        rounded-2xl
-                                        shadow-sm
+                                        dark:bg-[#141518]
+                                        rounded-xl
+                                        shadow-[0_1px_3px_rgba(0,0,0,0.04)]
+                                        dark:shadow-none
                                         border
                                         ${
                                             isEditing
-                                                ? "border-blue-400 dark:border-blue-500 shadow-md ring-4 ring-blue-500/10"
-                                                : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                                                ? "border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20"
+                                                : "border-slate-300/80 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700"
                                         }
-                                        p-5 sm:p-7
+                                        p-5 sm:p-6
                                         transition-all duration-200
                                     `}
                                 >
 
                                     {/* Question Header */}
-                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-5">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
 
                                         <div className="flex-grow w-full">
 
                                             {isEditing ? (
-                                                <div className="space-y-3">
+                                                <div className="space-y-2">
 
                                                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                                                         Edit Question Text
@@ -898,14 +897,14 @@ export default function EditQuiz() {
                                                             )
                                                         }
                                                         rows="2"
-                                                        className="w-full p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-y transition-all"
+                                                        className="w-full p-3 bg-slate-50 dark:bg-[#181A20] border border-slate-300/80 dark:border-[#3A3F47] rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-y transition-all text-sm"
                                                     />
 
                                                 </div>
                                             ) : (
-                                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white leading-snug flex gap-3">
+                                                <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white leading-snug flex gap-2.5">
 
-                                                    <span className="text-blue-600 dark:text-blue-500 shrink-0">
+                                                    <span className="text-blue-600 dark:text-blue-400 shrink-0 font-bold">
                                                         Q{index + 1}.
                                                     </span>
 
@@ -928,7 +927,7 @@ export default function EditQuiz() {
                                                         disabled={
                                                             isSavingQuestion
                                                         }
-                                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                                                        className="h-8 px-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-white dark:bg-[#181A20] hover:bg-slate-100 dark:hover:bg-[#252830] text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                                                     >
                                                         Cancel
                                                     </button>
@@ -943,8 +942,9 @@ export default function EditQuiz() {
                                                         disabled={
                                                             isSavingQuestion
                                                         }
-                                                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                                                        className="inline-flex items-center gap-1.5 h-8 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer"
                                                     >
+
 
                                                         <svg
                                                             className="w-4 h-4"
@@ -975,11 +975,10 @@ export default function EditQuiz() {
                                                             question.id
                                                         )
                                                     }
-                                                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                                                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-300/80 dark:border-[#3A3F47] bg-white dark:bg-[#181A20] hover:bg-slate-100 dark:hover:bg-[#252830] text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer shadow-xs"
                                                 >
-
                                                     <svg
-                                                        className="w-4 h-4"
+                                                        className="w-3.5 h-3.5"
                                                         fill="none"
                                                         stroke="currentColor"
                                                         viewBox="0 0 24 24"
@@ -991,9 +990,7 @@ export default function EditQuiz() {
                                                             d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                                                         />
                                                     </svg>
-
                                                     Edit
-
                                                 </button>
                                             )}
 
@@ -1003,18 +1000,18 @@ export default function EditQuiz() {
 
 
                                     {/* Divider */}
-                                    <div className="h-px w-full bg-slate-100 dark:bg-slate-800/50 my-4" />
+                                    <div className="h-px w-full bg-slate-100 dark:bg-slate-800/60 my-3.5" />
 
 
                                     {/* Options */}
                                     {isEditing && (
-                                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
+                                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2.5">
                                             Edit Options (Select radio to set correct answer)
                                         </label>
                                     )}
 
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
 
                                         {options.map((option, optionIndex) => (
                                             <div
@@ -1023,15 +1020,15 @@ export default function EditQuiz() {
                                                     optionIndex
                                                 }
                                                 className={`
-                                                    flex items-center gap-3
-                                                    p-3 rounded-xl border
-                                                    transition-all duration-200
+                                                    flex items-center gap-2.5
+                                                    px-3 py-2.5 rounded-lg border text-xs sm:text-sm min-h-[44px]
+                                                    transition-all duration-150
                                                     ${
                                                         option.is_correct
-                                                            ? "border-green-500 bg-green-50 dark:bg-green-500/10"
+                                                            ? "border-emerald-500/60 dark:border-emerald-500/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-300 font-semibold"
                                                             : isEditing
-                                                                ? "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
-                                                                : "border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20"
+                                                                ? "border-slate-300/70 dark:border-[#3A3F47] bg-white dark:bg-[#1A1D24] text-slate-800 dark:text-slate-200"
+                                                                : "border-slate-200/90 dark:border-slate-800/80 bg-slate-50/70 dark:bg-[#141518] text-slate-700 dark:text-slate-300"
                                                     }
                                                 `}
                                             >
@@ -1050,7 +1047,7 @@ export default function EditQuiz() {
                                                                 optionIndex
                                                             )
                                                         }
-                                                        className="w-4 h-4 text-green-600 bg-slate-100 border-slate-300 focus:ring-green-500 focus:ring-2 ml-1 cursor-pointer"
+                                                        className="w-4 h-4 text-emerald-600 bg-slate-100 border-slate-300 focus:ring-emerald-500 focus:ring-2 ml-0.5 cursor-pointer shrink-0"
                                                     />
                                                 )}
 
@@ -1067,18 +1064,18 @@ export default function EditQuiz() {
                                                                 event.target.value
                                                             )
                                                         }
-                                                        className="w-full bg-transparent p-1 text-slate-900 dark:text-white focus:outline-none focus:border-b focus:border-blue-500 transition-colors"
+                                                        className="w-full bg-transparent px-1 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-none focus:border-b focus:border-blue-500 transition-colors"
                                                     />
                                                 ) : (
-                                                    <div className="flex items-center justify-between w-full pr-2">
+                                                    <div className="flex items-center justify-between w-full pr-1">
 
-                                                        <span className="text-slate-700 dark:text-slate-300">
+                                                        <span className="leading-snug">
                                                             {option.text}
                                                         </span>
 
                                                         {option.is_correct && (
                                                             <svg
-                                                                className="w-5 h-5 text-green-500"
+                                                                className="w-4 h-4 text-emerald-500 shrink-0 ml-2"
                                                                 fill="none"
                                                                 stroke="currentColor"
                                                                 viewBox="0 0 24 24"
@@ -1086,8 +1083,8 @@ export default function EditQuiz() {
                                                                 <path
                                                                     strokeLinecap="round"
                                                                     strokeLinejoin="round"
-                                                                    strokeWidth="2"
-                                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                                    strokeWidth="2.5"
+                                                                    d="M5 13l4 4L19 7"
                                                                 />
                                                             </svg>
                                                         )}
@@ -1100,6 +1097,7 @@ export default function EditQuiz() {
 
                                     </div>
 
+
                                 </div>
                             )
                         })}
@@ -1109,7 +1107,6 @@ export default function EditQuiz() {
                 </section>
 
             </div>
-
-        </div>
+        </TeacherShell>
     )
-}
+}

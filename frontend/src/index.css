@@ -54,6 +54,118 @@
   --spacing-margin-desktop: 40px;
   --spacing-sidebar-width: 280px;
   --spacing-gutter: 24px;
-  --spacing-margin-mobile: 16px;
   --spacing-container-max: 1440px;
+}
+
+/* Global Surface & Component palette matching Teacher Dashboard */
+@layer utilities {
+  .bg-app-base {
+    @apply bg-[#f0f2f5] text-slate-900 dark:bg-[#101114] dark:text-white;
+  }
+  .bg-surface-card {
+    @apply bg-white border border-slate-300/90 shadow-[0_1px_3px_rgba(0,0,0,0.05)] dark:border-slate-800/80 dark:bg-[#141518] dark:shadow-none;
+  }
+  .bg-surface-subtle {
+    @apply bg-[#e5e8ee]/80 dark:bg-[#0e0f12];
+  }
+  .border-app {
+    @apply border-slate-300/90 dark:border-slate-800/80;
+  }
+  .border-app-subtle {
+    @apply border-slate-300 dark:border-slate-800;
+  }
+  .hover-card {
+    @apply hover:border-slate-400 dark:hover:border-slate-700 hover:shadow-md dark:hover:bg-[#181a20];
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar styling for quiz list */
+.custom-quiz-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-quiz-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-quiz-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+
+.custom-quiz-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+
+/* Custom dark-mode friendly scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.45);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.35);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+/* Global Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Base Motion & Tactile Feedback */
+.btn-tactile {
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.btn-tactile:active {
+  transform: scale(0.97);
+}
+
+.focus-ring-smooth {
+  transition: box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+.focus-ring-smooth:focus-within, .focus-ring-smooth:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }

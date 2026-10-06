@@ -10,6 +10,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import ScopedRateThrottle
+from django.core.cache import cache
 
 from apps.quizzes.models import Question, Quiz, QuizQuestion
 from apps.users.permissions import IsStudent
@@ -22,6 +24,8 @@ from .serializers import (
     AttemptSerializer,
     QuizDiscoverySerializer,
 )
+from .tasks import evaluate_code_submission
+
 
 
 class StudentTestView(APIView):
@@ -137,6 +141,10 @@ class QuizInstructionView(APIView):
 
     def get(self, request, quiz_code):
         quiz_code = str(quiz_code).strip()
+        cache_key = f"quiz_instructions_{quiz_code.upper()}"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data, status=status.HTTP_200_OK)
 
         try:
             quiz = (
@@ -174,31 +182,37 @@ class QuizInstructionView(APIView):
             for qq in quiz_questions
         )
 
-        return Response(
-            {
-                "quiz": {
-                    "id": quiz.id,
-                    "title": quiz.title,
-                    "subject": quiz.subject,
-                    "description": quiz.description,
-                    "teacher_name": quiz.teacher.name,
-                    "quiz_code": quiz.quiz_code,
-                    "status": quiz.status,
-                    "duration_minutes": quiz.duration_minutes,
-                    "max_attempts": quiz.max_attempts,
-                    "total_questions": quiz_questions.count(),
-                    "total_marks": total_marks,
-                    "requires_password": bool(quiz.password),
-                    "review_enabled": quiz.review_enabled,
-                    "shuffle_questions": quiz.shuffle_questions,
-                    "shuffle_options": quiz.shuffle_options,
-                    "starts_at": quiz.starts_at,
-                    "ends_at": quiz.ends_at,
-                },
-                "questions": serialized_questions,
+        response_data = {
+            "quiz": {
+                "id": quiz.id,
+                "title": quiz.title,
+                "subject": quiz.subject,
+                "description": quiz.description,
+                "teacher_name": getattr(quiz.teacher, "name", ""),
+                "quiz_code": quiz.quiz_code,
+                "status": quiz.status,
+                "duration_minutes": quiz.duration_minutes,
+                "max_attempts": quiz.max_attempts,
+                "total_questions": quiz_questions.count(),
+                "total_marks": total_marks,
+                "requires_password": bool(quiz.password),
+                "review_enabled": quiz.review_enabled,
+                "shuffle_questions": quiz.shuffle_questions,
+                "shuffle_options": quiz.shuffle_options,
+                "starts_at": quiz.starts_at,
+                "ends_at": quiz.ends_at,
             },
+            "questions": serialized_questions,
+        }
+
+        # Cache for 5 minutes (300 seconds) in Redis
+        cache.set(cache_key, response_data, 300)
+
+        return Response(
+            response_data,
             status=status.HTTP_200_OK,
         )
+
 
 
 class QuizDiscoveryView(APIView):
@@ -1067,11 +1081,14 @@ class RunCodeView(APIView):
     """
     Execute student code against sample test cases (or custom input) in real time during exam.
     Does not grade or change student score.
+    Throttled to max 10 runs/min per student to protect external runner engines.
     """
     permission_classes = [
         IsAuthenticated,
         IsStudent,
     ]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "code_run"
 
     def post(self, request):
         code = request.data.get("code", "")
@@ -1167,19 +1184,22 @@ class RunCodeView(APIView):
 class SubmitCodeView(APIView):
     """
     LeetCode-style 'Submit Code' for a specific CODING question during an exam attempt.
-    Runs code against ALL test cases (Sample + Hidden), saves answer_data, execution_result,
-    and awards score immediately.
+    Protected by rate throttling (max 5 submits/min) and supports asynchronous Celery pipeline
+    as well as immediate execution.
     """
     permission_classes = [
         IsAuthenticated,
         IsStudent,
     ]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "code_submit"
 
     def post(self, request):
         attempt_id = request.data.get("attempt_id")
         question_id = request.data.get("question_id")
         code = (request.data.get("code") or "").strip()
         language = request.data.get("language", "python")
+        async_mode = request.data.get("async", False)
 
         if not attempt_id or not question_id:
             return Response(
@@ -1225,72 +1245,61 @@ class SubmitCodeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Fetch ALL test cases for this question
-        test_cases = list(
-            question.test_cases.all().values(
-                "id", "input_data", "expected_output", "is_sample"
+        # If client requested async processing (or for heavy loads)
+        if async_mode:
+            task = evaluate_code_submission.delay(
+                str(attempt.id),
+                question.id,
+                code,
+                language,
             )
-        )
-
-        from apps.students.services.code_runner import run_code_batch
-
-        batch_results = run_code_batch(code, language, test_cases)
-        total_cases = len(batch_results)
-        passed_cases = sum(1 for r in batch_results if r.get("passed"))
-        all_passed = (passed_cases == total_cases) and total_cases > 0
-
-        # Calculate question marks
-        qq = QuizQuestion.objects.filter(quiz=attempt.quiz, question=question).first()
-        q_marks = qq.marks_override if (qq and qq.marks_override is not None) else question.marks
-        earned_marks = round((passed_cases / total_cases) * float(q_marks), 2) if total_cases > 0 else 0
-
-        # Get or create student Answer record
-        with transaction.atomic():
-            answer, _ = Answer.objects.get_or_create(
-                attempt=attempt,
-                question=question,
-                defaults={
-                    "status": Answer.Status.EVALUATED,
-                    "idempotency_key": f"submit_code_{attempt.id}_{question.id}_{timezone.now().timestamp()}",
+            return Response(
+                {
+                    "async": True,
+                    "task_id": task.id,
+                    "message": "Submission queued for background evaluation.",
                 },
+                status=status.HTTP_202_ACCEPTED,
             )
 
-            answer.answer_data = {
-                "code": code,
-                "language": language,
-            }
-            answer.evaluated_score = earned_marks
-            answer.status = Answer.Status.EVALUATED
-            answer.execution_result = {
-                "summary": f"{passed_cases}/{total_cases} test cases passed",
-                "passed_count": passed_cases,
-                "total_count": total_cases,
-                "all_passed": all_passed,
-                "results": batch_results,
-            }
-            answer.save()
-
-            # Recalculate attempt score sum
-            evaluated_sum = (
-                Answer.objects.filter(attempt=attempt)
-                .aggregate(models.Sum("evaluated_score"))["evaluated_score__sum"]
-                or 0
-            )
-            attempt.score = evaluated_sum
-            attempt.last_activity = timezone.now()
-            attempt.save(update_fields=["score", "last_activity", "updated_at"])
-
-        return Response(
-            {
-                "success": True,
-                "all_passed": all_passed,
-                "passed_count": passed_cases,
-                "total_count": total_cases,
-                "earned_score": earned_marks,
-                "max_score": float(q_marks),
-                "attempt_total_score": float(attempt.score),
-                "execution_result": answer.execution_result,
-            },
-            status=status.HTTP_200_OK,
+        # Default synchronous execution (with shared task logic for atomic persistence)
+        result = evaluate_code_submission(
+            str(attempt.id),
+            question.id,
+            code,
+            language,
         )
+
+        if result.get("status") == "FAILED":
+            return Response(
+                {"detail": result.get("error", "Evaluation failed.")},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(result, status=status.HTTP_200_OK)
+
+
+class CodeTaskStatusView(APIView):
+    """
+    Poll the status of an asynchronous Celery code evaluation task.
+    """
+    permission_classes = [
+        IsAuthenticated,
+        IsStudent,
+    ]
+
+    def get(self, request, task_id):
+        from celery.result import AsyncResult
+        res = AsyncResult(task_id)
+        if res.ready():
+            return Response({
+                "ready": True,
+                "successful": res.successful(),
+                "result": res.result if res.successful() else str(res.result),
+            }, status=status.HTTP_200_OK)
+        return Response({
+            "ready": False,
+            "status": res.status,
+        }, status=status.HTTP_200_OK)
+
 

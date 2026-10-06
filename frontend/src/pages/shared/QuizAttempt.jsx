@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
 import ThemeToggle from "../../components/ThemeToggle"
 import Editor from "@monaco-editor/react"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   getQuizInstructions,
   getAttempt,
@@ -95,6 +96,74 @@ export default function QuizAttempt() {
   const [isRunningCode, setIsRunningCode] = useState(false)
   const [isSubmittingCode, setIsSubmittingCode] = useState(false)
   const [codeSubmissions, setCodeSubmissions] = useState({}) // { [qId]: { all_passed, passed_count, total_count, earned_score, max_score } }
+
+  // Proctoring & Anti-Cheating State
+  const [tabSwitches, setTabSwitches] = useState(location.state?.attempt?.tab_switch_count || 0)
+  const [isBlocked, setIsBlocked] = useState(location.state?.attempt?.is_blocked || false)
+  const [showWarningModal, setShowWarningModal] = useState(false)
+  const [teacherBroadcastMsg, setTeacherBroadcastMsg] = useState("")
+  const wsRef = useRef(null)
+  const reconnectTimeoutRef = useRef(null)
+  const isIntentionalCloseRef = useRef(false)
+  const hasSentJoinedRef = useRef(false)
+  const isAwayRef = useRef(false)
+  const lastTabSwitchTimeRef = useRef(0)
+  const tabSwitchesRef = useRef(location.state?.attempt?.tab_switch_count || 0)
+  const isBlockedRef = useRef(location.state?.attempt?.is_blocked || false)
+  const timeLeftRef = useRef(timeLeft)
+  const answersRef = useRef(answers)
+
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
+
+  useEffect(() => {
+    tabSwitchesRef.current = tabSwitches
+  }, [tabSwitches])
+
+  useEffect(() => {
+    isBlockedRef.current = isBlocked
+  }, [isBlocked])
+
+  useEffect(() => {
+    timeLeftRef.current = timeLeft
+  }, [timeLeft])
+
+  // Interactive Split-Pane Divider state (Default 48% left pane)
+  const [splitRatio, setSplitRatio] = useState(48)
+  const [isDragging, setIsDragging] = useState(false)
+  const splitContainerRef = useRef(null)
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e) => {
+      if (!splitContainerRef.current) return
+      const rect = splitContainerRef.current.getBoundingClientRect()
+      const newWidth = e.clientX - rect.left
+      const newRatio = (newWidth / rect.width) * 100
+      // Constrain between 25% and 75%
+      if (newRatio >= 25 && newRatio <= 75) {
+        setSplitRatio(newRatio)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    window.addEventListener("mousemove", handleMouseMove)
+    window.addEventListener("mouseup", handleMouseUp)
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDragging])
 
   // Track sequence numbers per question for backend sequence verification
   const sequenceCounters = useRef({})
@@ -214,9 +283,9 @@ export default function QuizAttempt() {
     setTimeLeft(remaining)
   }, [])
 
-  // Timer Tick
+  // Timer Tick - Pauses if isBlocked is true!
   useEffect(() => {
-    if (timeLeft === null) return
+    if (timeLeft === null || isBlocked) return
 
     if (timeLeft <= 0) {
       triggerTimeUpAutoSubmit()
@@ -235,7 +304,180 @@ export default function QuizAttempt() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft])
+  }, [timeLeft, isBlocked])
+
+  // WebSocket Live Proctor Connection with Auto-Reconnect
+  const effectiveQuizId = quiz?.id || (typeof attempt?.quiz === "object" ? attempt?.quiz?.id : attempt?.quiz) || location.state?.quiz?.id
+  const currentAttemptId = attempt?.id
+
+  useEffect(() => {
+    if (!effectiveQuizId || !currentAttemptId) return
+
+    isIntentionalCloseRef.current = false
+
+    const connectWs = () => {
+      if (isIntentionalCloseRef.current) return
+
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+      const wsHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "127.0.0.1:8000" : window.location.host
+      const wsUrl = `${wsProtocol}//${wsHost}/ws/quiz-proctor/${effectiveQuizId}/`
+
+      console.log(`[QuizAttempt WS] Connecting to ${wsUrl} for attempt ${currentAttemptId}...`)
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log(`[QuizAttempt WS] Connected successfully.`)
+        if (!hasSentJoinedRef.current) {
+          hasSentJoinedRef.current = true
+          ws.send(JSON.stringify({
+            action: "STUDENT_JOINED",
+            attempt_id: currentAttemptId,
+          }))
+        } else {
+          // Reconnection heartbeat instead of duplicate join alert
+          ws.send(JSON.stringify({
+            action: "STUDENT_HEARTBEAT",
+            attempt_id: currentAttemptId,
+            seconds_left: timeLeftRef.current,
+            answered_count: Object.keys(answersRef.current || {}).length,
+          }))
+        }
+      }
+
+      ws.onerror = (err) => {
+        console.warn("[QuizAttempt WS] Connection error:", err)
+      }
+
+      ws.onclose = (ev) => {
+        console.log(`[QuizAttempt WS] Connection closed (code: ${ev.code})`)
+        if (!isIntentionalCloseRef.current && ev.code !== 1000) {
+          console.log("[QuizAttempt WS] Scheduling reconnect in 2.5s...")
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWs()
+          }, 2500)
+        }
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data)
+          const { event: evtType, data } = payload
+
+          if (evtType === "STUDENT_UNBLOCKED" && String(data.attempt_id) === String(currentAttemptId)) {
+            isBlockedRef.current = false
+            setIsBlocked(false)
+            setShowWarningModal(false)
+            isAwayRef.current = false
+            tabSwitchesRef.current = data.tab_switch_count || 0
+            setTabSwitches(data.tab_switch_count || 0)
+            if (data.seconds_left !== undefined && data.seconds_left !== null) {
+              timeLeftRef.current = data.seconds_left
+              setTimeLeft(data.seconds_left)
+            }
+          } else if (evtType === "TEACHER_BROADCAST") {
+            setTeacherBroadcastMsg(data.message)
+            setTimeout(() => setTeacherBroadcastMsg(""), 10000)
+          }
+        } catch (err) {
+          console.error("Proctor WS parse error:", err)
+        }
+      }
+    }
+
+    connectWs()
+
+    // Heartbeat every 10 seconds
+    const heartbeatInterval = setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const answeredCount = Object.keys(answersRef.current || {}).length
+        wsRef.current.send(JSON.stringify({
+          action: "STUDENT_HEARTBEAT",
+          attempt_id: currentAttemptId,
+          seconds_left: timeLeftRef.current,
+          answered_count: answeredCount,
+        }))
+      }
+    }, 10000)
+
+    return () => {
+      isIntentionalCloseRef.current = true
+      clearTimeout(reconnectTimeoutRef.current)
+      clearInterval(heartbeatInterval)
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        wsRef.current.close(1000, "Component unmounted")
+      }
+    }
+  }, [effectiveQuizId, currentAttemptId])
+
+  // Tab-Switch & Focus Lost Detection (Max 3 Warnings) - Real-time non-throttled listener
+  useEffect(() => {
+    if (!currentAttemptId) return
+
+    const handleFocusLoss = () => {
+      // If already blocked or time up, ignore
+      if (isBlockedRef.current || isTimeUp) return
+
+      // Verify user actually switched tab or left window
+      if (!document.hidden && document.hasFocus()) return
+
+      const now = Date.now()
+      // If already marked away and within 1000ms, debounce the duplicate blur/visibilitychange
+      if (isAwayRef.current && (now - lastTabSwitchTimeRef.current < 1000)) {
+        return
+      }
+      // Minimum 300ms cooldown between infractions
+      if (now - lastTabSwitchTimeRef.current < 300) {
+        return
+      }
+
+      isAwayRef.current = true
+      lastTabSwitchTimeRef.current = now
+
+      const nextCount = (tabSwitchesRef.current || 0) + 1
+      tabSwitchesRef.current = nextCount
+
+      // Send alert immediately via WebSocket to Teacher before background tab throttling
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            action: "TAB_SWITCH",
+            attempt_id: currentAttemptId,
+            seconds_left: timeLeftRef.current || 0,
+          }))
+        } catch (err) {
+          console.warn("[QuizAttempt] Failed to send TAB_SWITCH WS message:", err)
+        }
+      }
+
+      setTabSwitches(nextCount)
+
+      if (nextCount >= 3) {
+        isBlockedRef.current = true
+        setIsBlocked(true)
+        setShowWarningModal(false)
+      } else {
+        setShowWarningModal(true)
+      }
+    }
+
+    const handleFocusGain = () => {
+      if (!document.hidden && document.hasFocus()) {
+        isAwayRef.current = false
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleFocusLoss)
+    window.addEventListener("blur", handleFocusLoss)
+    window.addEventListener("focus", handleFocusGain)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleFocusLoss)
+      window.removeEventListener("blur", handleFocusLoss)
+      window.removeEventListener("focus", handleFocusGain)
+    }
+  }, [currentAttemptId, isTimeUp])
+
 
   // Center Question Pill in slider when currentIndex changes
   useEffect(() => {
@@ -565,6 +807,15 @@ export default function QuizAttempt() {
     try {
       const idempotencyKey = generateKey()
       await submitExam(attempt.id, idempotencyKey)
+
+      // Notify live proctoring teacher
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          action: "EXAM_SUBMITTED",
+          attempt_id: attempt.id,
+        }))
+      }
+
       localStorage.removeItem("attempt_id")
       localStorage.removeItem("current_quiz_code")
 
@@ -666,7 +917,7 @@ export default function QuizAttempt() {
   // Loading Screen
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0f1218] text-slate-900 dark:text-slate-100">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#101114] text-slate-800 dark:text-slate-100 transition-colors">
         <div className="relative flex items-center justify-center mb-5">
           <div className="w-14 h-14 border-4 border-blue-500/20 border-t-blue-600 rounded-full animate-spin"></div>
           <div className="absolute w-6 h-6 bg-blue-600/10 rounded-full"></div>
@@ -674,7 +925,7 @@ export default function QuizAttempt() {
         <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">
           Entering Secured Exam Workspace
         </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+        <p className="text-xs text-slate-500 mt-1">
           Loading synchronized question sets and local state...
         </p>
       </div>
@@ -684,8 +935,8 @@ export default function QuizAttempt() {
   // Error Screen
   if (loadError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f1218] p-4">
-        <div className="max-w-md w-full p-8 rounded-2xl bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/40 text-center shadow-xl">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101114] p-4 transition-colors">
+        <div className="max-w-md w-full p-8 rounded-2xl bg-white dark:bg-[#141518] border border-red-200 dark:border-red-900/40 text-center shadow-xl">
           <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -710,7 +961,7 @@ export default function QuizAttempt() {
 
   if (!currentQ) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0f1218] text-slate-700 dark:text-slate-300">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#101114] text-slate-700 dark:text-slate-300">
         No questions found in this examination.
       </div>
     )
@@ -722,26 +973,23 @@ export default function QuizAttempt() {
   const qType = (currentQ.question_type || currentQ.type || "MCQ").toUpperCase()
 
   return (
-    <div className="min-h-screen lg:h-screen flex flex-col bg-slate-50 dark:bg-[#0b0f17] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200 lg:overflow-hidden overflow-x-hidden w-full selection:bg-blue-500/20">
+    <div className="min-h-screen lg:h-screen flex flex-col bg-slate-50 dark:bg-[#101114] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-200 lg:overflow-hidden overflow-x-hidden w-full selection:bg-blue-500/20">
 
       {/* ─── 1. TOP SECURE BAR ────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 h-14 sm:h-16 bg-white/95 dark:bg-[#111622]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-3 sm:px-6 shrink-0 gap-3 shadow-xs">
+      <header className="sticky top-0 z-30 h-14 sm:h-16 bg-white/95 dark:bg-[#141518]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 shrink-0 gap-3 shadow-xs transition-colors">
         
         {/* Brand & Live Sync Pill */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
-              Q
-            </div>
-            <span className="hidden sm:inline font-bold text-base tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-              QUIESY
+            <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">
+              Quiesy
             </span>
           </div>
 
           <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
 
           {/* Sync status indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/50">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-[#1E2128] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">
             {savedStatus === "saving" ? (
               <>
                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
@@ -750,7 +998,7 @@ export default function QuizAttempt() {
             ) : savedStatus === "error" ? (
               <>
                 <div className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="text-red-500">Unsaved changes</span>
+                <span className="text-red-500 dark:text-red-400">Unsaved changes</span>
               </>
             ) : (
               <>
@@ -762,7 +1010,7 @@ export default function QuizAttempt() {
         </div>
 
         {/* Central Question Palette Carousel */}
-        <div className="flex-1 min-w-0 max-w-2xl overflow-hidden relative flex items-center bg-slate-100/70 dark:bg-[#161c2b] rounded-xl border border-slate-200/60 dark:border-slate-800 h-10 px-2 mx-1">
+        <div className="flex-1 min-w-0 max-w-2xl overflow-hidden relative flex items-center bg-slate-100 dark:bg-[#1E2128] rounded-xl border border-slate-200 dark:border-slate-800 h-10 px-2 mx-1">
           <div
             ref={sliderRef}
             className="flex gap-1.5 overflow-x-auto w-full py-1 scrollbar-hide items-center px-1"
@@ -771,14 +1019,14 @@ export default function QuizAttempt() {
               const state = getQuestionPaletteState(q, idx)
               const isActive = idx === currentIndex
 
-              let btnClasses = "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-blue-400"
+              let btnClasses = "bg-white dark:bg-[#141518] text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-700/70 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-900 dark:hover:text-white"
               
               if (state === "marked_answered") {
-                btnClasses = "bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-400 dark:border-purple-600 ring-1 ring-purple-500/30"
+                btnClasses = "bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600 ring-1 ring-purple-500/30"
               } else if (state === "marked") {
-                btnClasses = "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-400 dark:border-amber-600"
+                btnClasses = "bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-600"
               } else if (state === "answered") {
-                btnClasses = "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-600"
+                btnClasses = "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-600"
               }
 
               return (
@@ -806,7 +1054,7 @@ export default function QuizAttempt() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs sm:text-sm font-bold border transition-colors ${
                 timeLeft < 300
                   ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 animate-pulse"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+                  : "bg-slate-100 dark:bg-[#1E2128] text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700"
               }`}
             >
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -821,24 +1069,37 @@ export default function QuizAttempt() {
       </header>
 
       {/* ─── 2. MAIN EXAM WORKSPACE ──────────────────────────────────── */}
-      <main className="flex flex-col lg:flex-row lg:flex-1 lg:overflow-hidden w-full overflow-x-hidden">
+      <main
+        ref={splitContainerRef}
+        className={`flex flex-col lg:flex-row lg:flex-1 lg:overflow-hidden w-full overflow-x-hidden ${
+          isDragging ? "select-none cursor-col-resize" : ""
+        }`}
+      >
 
         {/* ── LEFT PANE: Question Details & Tags ──────────────────────── */}
-        <section className="w-full max-w-full lg:w-[48%] lg:min-w-[35%] lg:max-w-[65%] border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111622] transition-colors lg:h-full lg:overflow-y-auto custom-scrollbar flex flex-col">
+        <section
+          style={{ width: undefined }}
+          className="w-full max-w-full lg:min-w-[25%] lg:max-w-[75%] border-b lg:border-b-0 border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141518] transition-colors lg:h-full lg:overflow-y-auto custom-scrollbar flex flex-col"
+          ref={(node) => {
+            if (node && window.innerWidth >= 1024) {
+              node.style.width = `${splitRatio}%`
+            }
+          }}
+        >
           <div className="p-4 sm:p-6 lg:p-8 flex-1">
             
             {/* Badges and Review Toggle */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800/60">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/50">
+                <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
                   Question {currentIndex + 1} of {questions.length}
                 </span>
 
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#1E2128] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">
                   {qType}
                 </span>
 
-                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/30">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                   +{currentQ.marks ?? currentQ.marks_override ?? 1} Mark{(currentQ.marks > 1 || currentQ.marks_override > 1) ? "s" : ""}
                 </span>
               </div>
@@ -848,8 +1109,8 @@ export default function QuizAttempt() {
                 onClick={toggleMarkForReview}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition border cursor-pointer ${
                   isCurrentMarked
-                    ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700"
-                    : "bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white"
+                    ? "bg-amber-50 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-500/30"
+                    : "bg-slate-100 dark:bg-[#1E2128] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
                 }`}
               >
                 <svg
@@ -865,27 +1126,30 @@ export default function QuizAttempt() {
             </div>
 
             {/* Question Text with smooth fade/slide */}
-            <div
-              key={currentQId}
-              className={`question-content-transition ${
-                direction === "next" ? "animate-slide-in-right" : "animate-slide-in-left"
-              }`}
-            >
-              <h2 className="text-base sm:text-lg lg:text-xl font-medium text-slate-900 dark:text-slate-100 leading-relaxed break-words whitespace-pre-wrap">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentQId}
+                initial={{ x: direction === "next" ? 20 : -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: direction === "next" ? -20 : 20, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="question-content-transition"
+              >
+              <h2 className="text-base sm:text-lg lg:text-xl font-medium text-slate-900 dark:text-white leading-relaxed break-words whitespace-pre-wrap">
                 {currentQ.text}
               </h2>
 
               {/* Code Snippet inside Question if present */}
               {currentQ.code_snippet && (
-                <div className="mt-4 p-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
+                <div className="mt-4 p-4 rounded-xl bg-slate-900 dark:bg-[#101114] text-slate-100 font-mono text-xs sm:text-sm overflow-x-auto border border-slate-800">
                   <pre>{currentQ.code_snippet}</pre>
                 </div>
               )}
 
               {/* Subjective Guidance note */}
               {qType === "SUBJECTIVE" && (
-                <div className="mt-6 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
-                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mt-6 p-3 rounded-xl bg-blue-50 dark:bg-[#1E2128] border border-blue-200 dark:border-blue-500/20 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                  <svg className="w-4 h-4 shrink-0 mt-0.5 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span>
@@ -893,20 +1157,48 @@ export default function QuizAttempt() {
                   </span>
                 </div>
               )}
-            </div>
+            </motion.div>
+            </AnimatePresence>
           </div>
         </section>
 
+        {/* ── DRAGGABLE SPLIT-PANE DIVIDER (Visual Handle + Resizer Track) ──────────────── */}
+        <div
+          onMouseDown={handleMouseDown}
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize panels"
+          className="hidden lg:flex relative items-center justify-center w-[4px] hover:w-[6px] bg-slate-300 dark:bg-[#2A2D35] hover:bg-blue-500 active:bg-blue-500 cursor-col-resize select-none transition-all duration-150 shrink-0 z-10 group"
+        >
+          {/* Visual Handle: 3 vertically stacked dots in exact center */}
+          <div className="absolute flex flex-col items-center justify-center gap-1 py-3 px-1 rounded-full bg-white dark:bg-[#1E2128] border border-slate-300 dark:border-slate-700/80 shadow-md group-hover:shadow-[0_0_12px_rgba(59,130,246,0.3)] group-hover:scale-110 group-hover:border-blue-400 transition-all duration-300 pointer-events-none">
+            <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-blue-400 transition-colors duration-300" />
+            <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-blue-400 transition-colors duration-300" />
+            <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-blue-400 transition-colors duration-300" />
+          </div>
+        </div>
+
         {/* ── RIGHT PANE: Answering Area ──────────────────────────────── */}
-        <section className="flex-1 flex flex-col w-full min-w-0 bg-slate-50/50 dark:bg-[#0b0f17] lg:h-full lg:overflow-y-auto custom-scrollbar">
+        <section
+          style={{ width: undefined }}
+          className="flex-1 flex flex-col w-full min-w-0 bg-slate-50/70 dark:bg-[#101114] lg:h-full lg:overflow-y-auto custom-scrollbar transition-colors"
+          ref={(node) => {
+            if (node && window.innerWidth >= 1024) {
+              node.style.width = `${100 - splitRatio}%`
+            }
+          }}
+        >
           
           {/* MCQ Mode */}
+          <AnimatePresence mode="wait">
           {qType === "MCQ" && (
-            <div
+            <motion.div
               key={`mcq-${currentQId}`}
-              className={`p-4 sm:p-6 lg:p-10 w-full max-w-3xl mx-auto flex flex-col justify-center min-h-full ${
-                direction === "next" ? "animate-slide-in-right" : "animate-slide-in-left"
-              }`}
+              initial={{ x: direction === "next" ? 20 : -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: direction === "next" ? -20 : 20, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="p-4 sm:p-6 lg:p-10 w-full max-w-3xl mx-auto flex flex-col justify-center min-h-full"
             >
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -915,7 +1207,7 @@ export default function QuizAttempt() {
                 {currentAnswer.option_id && (
                   <button
                     onClick={handleClearResponse}
-                    className="text-xs text-slate-500 hover:text-red-500 transition font-medium underline"
+                    className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition font-medium underline cursor-pointer"
                   >
                     Clear Choice
                   </button>
@@ -929,56 +1221,77 @@ export default function QuizAttempt() {
                   const letter = optionLetters[optIndex] || String(optIndex + 1)
 
                   return (
-                    <div
+                    <motion.div
+                      layout
+                      whileTap={{ scale: 0.98 }}
                       key={opt.id}
                       onClick={() => handleSelectMCQ(opt.id)}
-                      className={`group relative flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-150 select-none ${
+                      className={`group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors duration-200 select-none overflow-hidden ${
                         isSelected
-                          ? "border-blue-600 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-500 shadow-sm"
-                          : "border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-[#111622]"
+                          ? "border-blue-600 bg-blue-50 dark:bg-blue-600/20 text-blue-900 dark:text-white shadow-sm ring-1 ring-blue-500/50"
+                          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white hover:bg-slate-50/80 dark:bg-[#141518] dark:hover:bg-[#181A20] text-slate-800 dark:text-slate-200"
                       }`}
                     >
+                      {/* Ripple effect overlay on select */}
+                      <AnimatePresence>
+                        {isSelected && (
+                          <motion.div
+                            initial={{ scale: 0, opacity: 0.5 }}
+                            animate={{ scale: 1, opacity: 0 }}
+                            transition={{ duration: 0.5 }}
+                            className="absolute inset-0 bg-blue-400 rounded-xl pointer-events-none"
+                          />
+                        )}
+                      </AnimatePresence>
+
                       <div
                         className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border transition ${
                           isSelected
                             ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 group-hover:border-slate-400"
+                            : "bg-slate-100 dark:bg-[#1E2128] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 group-hover:border-slate-400 dark:group-hover:border-slate-500 group-hover:text-slate-900 dark:group-hover:text-white"
                         }`}
                       >
                         {letter}
                       </div>
 
                       <span
-                        className={`text-sm sm:text-base font-medium flex-1 break-words ${
+                        className={`text-sm sm:text-base font-medium flex-1 break-words transition-colors ${
                           isSelected
-                            ? "text-blue-950 dark:text-blue-100 font-semibold"
-                            : "text-slate-700 dark:text-slate-300"
+                            ? "text-blue-950 dark:text-white font-semibold"
+                            : "text-slate-800 dark:text-slate-300"
                         }`}
                       >
                         {opt.text}
                       </span>
 
                       {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                        <motion.div 
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", bounce: 0.5 }}
+                          className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs"
+                        >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                           </svg>
-                        </div>
+                        </motion.div>
                       )}
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* MSQ Mode (Multiple Select Questions) */}
           {qType === "MSQ" && (
-            <div
+            <motion.div
               key={`msq-${currentQId}`}
-              className={`p-4 sm:p-6 lg:p-10 w-full max-w-3xl mx-auto flex flex-col justify-center min-h-full ${
-                direction === "next" ? "animate-slide-in-right" : "animate-slide-in-left"
-              }`}
+              initial={{ x: direction === "next" ? 20 : -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: direction === "next" ? -20 : 20, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="p-4 sm:p-6 lg:p-10 w-full max-w-3xl mx-auto flex flex-col justify-center min-h-full"
             >
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -987,7 +1300,7 @@ export default function QuizAttempt() {
                 {Array.isArray(currentAnswer.option_ids) && currentAnswer.option_ids.length > 0 && (
                   <button
                     onClick={handleClearResponse}
-                    className="text-xs text-slate-500 hover:text-red-500 transition font-medium underline"
+                    className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition font-medium underline cursor-pointer"
                   >
                     Clear Choices
                   </button>
@@ -1002,62 +1315,83 @@ export default function QuizAttempt() {
                   const letter = optionLetters[optIndex] || String(optIndex + 1)
 
                   return (
-                    <div
+                    <motion.div
+                      layout
+                      whileTap={{ scale: 0.98 }}
                       key={opt.id}
                       onClick={() => handleToggleMSQ(opt.id)}
-                      className={`group relative flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all duration-150 select-none ${
+                      className={`group relative flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-colors duration-200 select-none overflow-hidden ${
                         isSelected
-                          ? "border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/30 dark:border-indigo-500 shadow-sm"
-                          : "border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-[#111622]"
+                          ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-950 dark:text-white shadow-sm ring-1 ring-indigo-500/50"
+                          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white hover:bg-slate-50/80 dark:bg-[#141518] dark:hover:bg-[#181A20] text-slate-800 dark:text-slate-200"
                       }`}
                     >
+                      {/* Ripple effect overlay on select */}
+                      <AnimatePresence>
+                        {isSelected && (
+                          <motion.div
+                            initial={{ scale: 0, opacity: 0.5 }}
+                            animate={{ scale: 1, opacity: 0 }}
+                            transition={{ duration: 0.5 }}
+                            className="absolute inset-0 bg-indigo-400 rounded-xl pointer-events-none"
+                          />
+                        )}
+                      </AnimatePresence>
+
                       <div
                         className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 transition ${
                           isSelected
                             ? "bg-indigo-600 text-white border-indigo-600"
-                            : "border-slate-300 dark:border-slate-600 group-hover:border-slate-400"
+                            : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-[#1E2128] group-hover:border-slate-400 dark:group-hover:border-slate-500"
                         }`}
                       >
                         {isSelected && (
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <motion.svg 
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", bounce: 0.5 }}
+                            className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                          </svg>
+                          </motion.svg>
                         )}
                       </div>
 
-                      <span className="text-xs font-bold text-slate-400 dark:text-slate-500 shrink-0">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
                         {letter}.
                       </span>
 
                       <span
-                        className={`text-sm sm:text-base font-medium flex-1 break-words ${
+                        className={`text-sm sm:text-base font-medium flex-1 break-words transition-colors ${
                           isSelected
-                            ? "text-indigo-950 dark:text-indigo-100 font-semibold"
-                            : "text-slate-700 dark:text-slate-300"
+                            ? "text-indigo-950 dark:text-white font-semibold"
+                            : "text-slate-800 dark:text-slate-300"
                         }`}
                       >
                         {opt.text}
                       </span>
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Subjective Mode */}
           {qType === "SUBJECTIVE" && (
-            <div
+            <motion.div
               key={`subj-${currentQId}`}
-              className={`p-4 sm:p-6 lg:p-8 flex-1 flex flex-col ${
-                direction === "next" ? "animate-slide-in-right" : "animate-slide-in-left"
-              }`}
+              initial={{ x: direction === "next" ? 20 : -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: direction === "next" ? -20 : 20, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col"
             >
               <div className="flex items-center justify-between mb-3">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Your Answer Response
                 </label>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-500 font-mono">
                   {(currentAnswer.text || "").length} characters
                 </span>
               </div>
@@ -1066,19 +1400,26 @@ export default function QuizAttempt() {
                 onChange={(e) => handleSubjectiveChange(e.target.value)}
                 placeholder="Type your structured solution or essay here..."
                 rows={14}
-                className="w-full flex-1 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111622] text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 font-sans text-sm sm:text-base leading-relaxed resize-none"
+                className="w-full flex-1 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141518] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-sans text-sm sm:text-base leading-relaxed resize-none shadow-xs"
               />
-            </div>
+            </motion.div>
           )}
 
           {/* Coding IDE Mode */}
           {qType === "CODING" && (
-            <div className="flex-1 flex flex-col h-full">
+            <motion.div
+              key={`coding-${currentQId}`}
+              initial={{ x: direction === "next" ? 20 : -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: direction === "next" ? -20 : 20, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="flex-1 flex flex-col h-full min-h-0"
+            >
               {/* Language Toolbar */}
-              <div className="h-11 bg-white dark:bg-[#111622] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 shrink-0">
+              <div className="h-11 bg-slate-100 dark:bg-[#141518] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Online Code Editor
                   </span>
                 </div>
@@ -1087,7 +1428,7 @@ export default function QuizAttempt() {
                   <select
                     value={currentAnswer.language || currentQ.language || "python"}
                     onChange={(e) => handleLanguageChange(e.target.value)}
-                    className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    className="bg-white dark:bg-[#1E2128] border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-xs"
                   >
                     <option value="python">Python 3</option>
                     <option value="javascript">JavaScript</option>
@@ -1099,8 +1440,8 @@ export default function QuizAttempt() {
                   {codeSubmissions[currentQId] && (
                     <div className={`hidden sm:flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
                       codeSubmissions[currentQId].all_passed
-                        ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
-                        : "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+                        ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                        : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
                     }`}>
                       <span>{codeSubmissions[currentQId].all_passed ? "✓ Accepted" : "⚠ Partial"}</span>
                       <span className="font-normal opacity-80">({codeSubmissions[currentQId].passed_count}/{codeSubmissions[currentQId].total_count})</span>
@@ -1111,13 +1452,13 @@ export default function QuizAttempt() {
                   <button
                     onClick={handleRunCode}
                     disabled={isRunningCode || isSubmittingCode}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 dark:bg-[#1E2128] dark:hover:bg-[#252830] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-xs"
                     title="Run code against sample test cases (does not save marks)"
                   >
                     {isRunningCode ? (
                       <div className="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <svg className="w-3.5 h-3.5 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                       </svg>
                     )}
@@ -1158,7 +1499,7 @@ export default function QuizAttempt() {
                   }
                   value={currentAnswer.code ?? (currentQ.starter_code || "")}
                   onChange={(val) => handleCodeChange(val || "")}
-                  theme={isDarkTheme ? "vs-dark" : "light"}
+                  theme="vs-dark"
                   options={{
                     minimap: { enabled: false },
                     fontSize: 13,
@@ -1173,42 +1514,42 @@ export default function QuizAttempt() {
               </div>
 
               {/* Console Output Dock */}
-              <div className="h-44 sm:h-52 flex flex-col shrink-0 bg-white dark:bg-[#0e121a]">
-                <div className="h-8 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 bg-slate-50 dark:bg-slate-800/40 shrink-0">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              <div className="h-44 sm:h-52 flex flex-col shrink-0 bg-slate-900 dark:bg-[#101114]">
+                <div className="h-8 border-b border-slate-800 flex items-center justify-between px-4 bg-slate-950 dark:bg-[#141518] shrink-0">
+                  <span className="text-xs font-bold text-slate-400">
                     Test Results Console
                   </span>
                   {codeOutputs[currentQId] && (
                     <button
                       onClick={() => setCodeOutputs((p) => ({ ...p, [currentQId]: "" }))}
-                      className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      className="text-xs text-slate-400 hover:text-white cursor-pointer"
                     >
                       Clear
                     </button>
                   )}
                 </div>
-                <div className="flex-1 p-3 font-mono text-xs overflow-y-auto bg-slate-950 text-slate-300">
+                <div className="flex-1 p-3 font-mono text-xs overflow-y-auto bg-slate-900 dark:bg-[#101114] text-slate-300">
                   {codeOutputs[currentQId] ? (
                     <pre className="whitespace-pre-wrap break-words">{codeOutputs[currentQId]}</pre>
                   ) : (
-                    <span className="text-slate-600">{"// Click 'Run Tests' to compile and execute your code against test cases."}</span>
+                    <span className="text-slate-500">{"// Click 'Run Tests' to compile and execute your code against test cases."}</span>
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
-
+          </AnimatePresence>
         </section>
       </main>
 
       {/* ─── 3. BOTTOM ACTIONS NAVIGATION BAR ────────────────────────── */}
-      <footer className="sticky bottom-0 lg:relative z-20 h-14 sm:h-16 shrink-0 bg-white dark:bg-[#111622] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 gap-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.04)]">
+      <footer className="sticky bottom-0 lg:relative z-20 h-14 sm:h-16 shrink-0 bg-white dark:bg-[#141518] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 sm:px-6 gap-2 shadow-xs transition-colors">
         
         {/* Previous Button */}
         <button
           onClick={handlePrev}
           disabled={currentIndex === 0 || isSubmitting}
-          className="flex items-center gap-1.5 px-3 sm:px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+          className="flex items-center gap-1.5 px-3 sm:px-5 py-2 rounded-xl font-semibold text-xs sm:text-sm bg-slate-100 hover:bg-slate-200 dark:bg-[#1E2128] text-slate-700 dark:text-slate-300 dark:hover:bg-[#252830] dark:hover:text-white border border-slate-200 dark:border-slate-700/80 disabled:opacity-40 disabled:cursor-not-allowed transition btn-tactile cursor-pointer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -1223,7 +1564,7 @@ export default function QuizAttempt() {
           <button
             onClick={() => setShowSubmitModal(true)}
             disabled={isSubmitting}
-            className="flex items-center gap-1.5 px-3 sm:px-5 py-2 rounded-xl font-bold text-xs sm:text-sm bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 hover:bg-red-100 dark:hover:bg-red-900/40 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 sm:px-5 py-2 rounded-xl font-bold text-xs sm:text-sm bg-red-50 hover:bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 dark:hover:bg-red-500/20 transition btn-tactile cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1236,7 +1577,7 @@ export default function QuizAttempt() {
             <button
               onClick={handleNext}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-4 sm:px-6 py-2 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition active:scale-[0.98] cursor-pointer"
+              className="flex items-center gap-1.5 px-4 sm:px-6 py-2 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition btn-tactile cursor-pointer"
             >
               <span>Next</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1247,7 +1588,7 @@ export default function QuizAttempt() {
             <button
               onClick={() => setShowSubmitModal(true)}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 px-4 sm:px-6 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition active:scale-[0.98] cursor-pointer"
+              className="flex items-center gap-1.5 px-4 sm:px-6 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition btn-tactile cursor-pointer"
             >
               <span>Review & Submit</span>
             </button>
@@ -1257,12 +1598,12 @@ export default function QuizAttempt() {
 
       {/* ─── 4. SUBMIT CONFIRMATION MODAL ────────────────────────────── */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="max-w-md w-full rounded-2xl bg-white dark:bg-[#111622] border border-slate-200 dark:border-slate-800 p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="max-w-md w-full rounded-2xl bg-white dark:bg-[#141518] border border-slate-200 dark:border-slate-800 p-6 shadow-2xl">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
               Ready to submit your examination?
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-5">
               Please check your attempt overview below. Once submitted, you cannot revise your answers.
             </p>
 
@@ -1379,6 +1720,86 @@ export default function QuizAttempt() {
           </div>
         </div>
       )}
+
+      {/* --- PROCTOR WARNING MODAL (STRIKE 1 & 2) --- */}
+
+      {showWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border-2 border-amber-500/50 p-6 rounded-2xl shadow-2xl text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center mb-4">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white">
+              Tab Switch Warning ({tabSwitches}/3)
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              You left the exam window or switched tabs. This infraction has been logged in real-time to your proctor.
+            </p>
+            <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-900/40 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              ⚠️ If you switch tabs 3 times, your exam session will be <strong>LOCKED</strong>.
+            </div>
+            <button
+              onClick={() => setShowWarningModal(false)}
+              className="w-full mt-5 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer"
+            >
+              I Understand & Return to Exam
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- EXAM BLOCKED & FROZEN OVERLAY (STRIKE 3) --- */}
+      {isBlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border-2 border-red-500/80 p-8 rounded-2xl shadow-2xl text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white">
+              Exam Session Frozen & Blocked
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              You exceeded the maximum allowed tab switches (3/3). Your exam has been paused to protect assessment integrity.
+            </p>
+            <div className="my-5 p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-left space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-500">Timer State:</span>
+                <span className="font-bold text-red-600 dark:text-red-400">PAUSED (No time lost)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-semibold text-slate-500">Status:</span>
+                <span className="font-bold text-red-600 dark:text-red-400">Waiting for Proctor Unblock</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Please contact your instructor or exam invigilator. Once they authorize an unblock from their cockpit, this window will automatically unlock and resume your timer.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* --- TEACHER BROADCAST BANNER --- */}
+      {teacherBroadcastMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-xl w-full px-4 animate-slide-in-right">
+          <div className="p-4 rounded-xl bg-blue-600 text-white shadow-xl flex items-center gap-3">
+            <svg className="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+            </svg>
+            <div className="flex-1 text-xs sm:text-sm font-medium">
+              <span className="font-bold block uppercase tracking-wider text-[11px] text-blue-200">Instructor Announcement</span>
+              {teacherBroadcastMsg}
+            </div>
+            <button onClick={() => setTeacherBroadcastMsg("")} className="p-1 hover:bg-blue-700 rounded-lg">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* Transition & Custom Scrollbar Styles */}
       <style dangerouslySetInnerHTML={{__html: `

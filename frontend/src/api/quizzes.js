@@ -95,6 +95,10 @@ export const getQuizResults = (quizId) => {
     return API.get(`quizzes/quizzes/${quizId}/results/`)
 }
 
+export const getLiveProctorRoster = (quizId) => {
+    return API.get(`quizzes/quizzes/${quizId}/live-proctor/`)
+}
+
 export const toggleQuizReview = (quizId, reviewOn) => {
     return API.post(`quizzes/quizzes/${quizId}/toggle-review/`, {
         review_on: reviewOn,
@@ -103,4 +107,4 @@ export const toggleQuizReview = (quizId, reviewOn) => {
 
 export const deleteQuiz = (quizId) => {
     return API.delete(`quiz/${quizId}/delete/`)
-}
+}
