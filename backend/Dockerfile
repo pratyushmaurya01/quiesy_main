@@ -1,10 +1,8 @@
 # 1. Base image Python 3.10 le rahe hain
 FROM python:3.10-slim
 
-# 2. Render ko bol rahe hain ki Java (JDK) install karo (C++ hata diya hai)
-RUN apt-get update && apt-get install -y \
-    default-jdk \
-    && rm -rf /var/lib/apt/lists/*
+# No local JDK needed since we use Judge0 API for code execution
+
 
 # 3. Server ke andar humara working folder /app hoga
 WORKDIR /app
