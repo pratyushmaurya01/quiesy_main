@@ -71,7 +71,6 @@ const navItems = [
     { label: "Dashboard",     to: "/dashboard",     icon: "dashboard" },
     { label: "Question Bank", to: "/question-bank", icon: "questions" },
     { label: "Quizzes",       to: "/create-quiz",   icon: "quizzes"   },
-    { label: "Settings",      to: "/settings",      icon: "settings"  },
 ]
 
 export default function TeacherShell({ children, noPadding = false, breadcrumbs = null }) {

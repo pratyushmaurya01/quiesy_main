@@ -36,6 +36,7 @@ ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'daphne',
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -54,6 +55,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -233,4 +235,19 @@ PASSWORD_RESET_TIMEOUT = 900
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
     "http://localhost:5173",
-)
+)
+
+JAZZMIN_SETTINGS = {
+    "site_title": "Quiesy Admin",
+    "site_header": "Quiesy",
+    "site_brand": "Quiesy Admin",
+    "welcome_sign": "Welcome to Quiesy Admin Panel",
+    "copyright": "Quiesy",
+    "search_model": ["users.User", "quizzes.Quiz"],
+    "show_ui_builder": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "theme": "darkly",
+    "dark_mode_theme": "darkly",
+}

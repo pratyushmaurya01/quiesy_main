@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useQuery, useQueries } from "@tanstack/react-query"
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import { motion } from "framer-motion"
@@ -7,11 +7,13 @@ import { motion } from "framer-motion"
 import TeacherShell from "../../components/layout/TeacherShell"
 import QuizCard from "../../components/QuizCard"
 import QuizDetailCard from "../../components/QuizDetailCard"
+import ConfirmDeleteModal from "../../components/layout/ConfirmDeleteModal"
 
 import {
     getQuestion,
     getQuizzes,
     getQuizQuestions,
+    deleteQuiz,
 } from "../../api/quizzes"
 
 function Icon({ name, className = "h-5 w-5" }) {
@@ -181,6 +183,27 @@ export default function TeacherDashboard() {
 
 
     const [selectedQuizId, setSelectedQuizId] = useState(null)
+    const [deleteQuizId, setDeleteQuizId] = useState(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const queryClient = useQueryClient()
+
+    const confirmDeleteQuiz = async () => {
+        if (!deleteQuizId) return
+        setIsDeleting(true)
+        try {
+            await deleteQuiz(deleteQuizId)
+            queryClient.invalidateQueries({ queryKey: ['quizzes', 'teacher'] })
+            if (selectedQuizId === deleteQuizId) {
+                setSelectedQuizId(null)
+            }
+            setDeleteQuizId(null)
+        } catch (error) {
+            console.error(error)
+            window.alert("Unable to delete quiz.")
+        } finally {
+            setIsDeleting(false)
+        }
+    }
 
     const [search, setSearch] = useState("")
     const [statusFilter, setStatusFilter] = useState("ALL")
@@ -564,6 +587,7 @@ export default function TeacherDashboard() {
                                                                     `/quiz/${quizId}/live-proctor`
                                                                 )
                                                             }
+                                                            onDelete={setDeleteQuizId}
                                                         />
                                                     </motion.div>
                                                 )
@@ -667,6 +691,14 @@ export default function TeacherDashboard() {
                     </section>
                 )}
             </motion.div>
+            <ConfirmDeleteModal
+                isOpen={!!deleteQuizId}
+                onClose={() => setDeleteQuizId(null)}
+                onConfirm={confirmDeleteQuiz}
+                title="Delete Quiz?"
+                message="Are you sure you want to completely delete this quiz and all of its associated data? This action cannot be undone."
+                isDeleting={isDeleting}
+            />
         </TeacherShell>
     )
 }

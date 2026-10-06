@@ -50,6 +50,8 @@
   --color-inverse-primary: #b4c5ff;
   --color-tertiary: #46566c;
 
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
   --spacing-unit: 8px;
   --spacing-margin-desktop: 40px;
   --spacing-sidebar-width: 280px;
@@ -137,6 +139,10 @@
 /* Global Smooth Scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
 }
 
 /* Base Motion & Tactile Feedback */

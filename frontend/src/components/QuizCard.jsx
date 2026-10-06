@@ -105,6 +105,7 @@ export default function QuizCard({
     totalMarks = null,
     onSelect,
     onLiveProctor,
+    onDelete,
 }) {
     return (
         <button
@@ -141,14 +142,29 @@ export default function QuizCard({
                     </span>
                 </div>
 
-                <span
-                    className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold ${getStatusClasses(
-                        quiz.status
-                    )}`}
-                >
-                    <span className="mr-1">●</span>
-                    {formatStatus(quiz.status)}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span
+                        className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold ${getStatusClasses(
+                            quiz.status
+                        )}`}
+                    >
+                        <span className="mr-1">●</span>
+                        {formatStatus(quiz.status)}
+                    </span>
+                    {onDelete && (
+                        <div
+                            role="button"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onDelete(quiz.id)
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded transition-colors"
+                            aria-label="Delete quiz"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Title */}

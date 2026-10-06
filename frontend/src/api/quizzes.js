@@ -21,6 +21,14 @@ export const updateQuestion = (id, data) => {
     return API.patch(`quizzes/questions/${id}/`, data)
 }
 
+export const generateAIQuestions = (data) => {
+    return API.post("quizzes/questions/generate_ai/", data)
+}
+
+export const deleteQuestion = (id) => {
+    return API.delete(`quizzes/questions/${id}/`)
+}
+
 export const deactivateQuestion = (id) => {
     return API.delete(`quizzes/questions/${id}/`)
 }
@@ -106,5 +114,5 @@ export const toggleQuizReview = (quizId, reviewOn) => {
 }
 
 export const deleteQuiz = (quizId) => {
-    return API.delete(`quiz/${quizId}/delete/`)
+    return API.delete(`quizzes/quizzes/${quizId}/`)
 }

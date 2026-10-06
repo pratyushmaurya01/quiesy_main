@@ -1,13 +1,12 @@
 import { useCallback, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import TeacherShell from "../../components/layout/TeacherShell"
 import QuestionFilters from "../../components/questions/QuestionFilters"
 import QuestionRow from "../../components/questions/QuestionRow"
+import AiGeneratorModal from "../../components/questions/AiGeneratorModal"
+import ConfirmDeleteModal from "../../components/layout/ConfirmDeleteModal"
 import { useNavigate } from "react-router-dom"
-import {
-    deactivateQuestion,
-    getQuestions,
-} from "../../api/quizzes"
+import { getQuestions, deleteQuestion, generateAIQuestions } from "../../api/quizzes"
 
 export default function QuestionBank() {
     const [search, setSearch] = useState("")
@@ -72,38 +71,34 @@ export default function QuestionBank() {
         )
     }
 
-    const handleDeactivate = async (id) => {
-        const confirmed = window.confirm(
-            "Deactivate this question?"
-        )
+    const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+    const [deleteQuestionId, setDeleteQuestionId] = useState(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const queryClient = useQueryClient()
 
-        if (!confirmed) {
-            return
-        }
+    const handleGenerateAi = async (data) => {
+        await generateAIQuestions(data)
+        queryClient.invalidateQueries({ queryKey: ['questions'] })
+    }
 
+    const confirmDelete = async () => {
+        if (!deleteQuestionId) return
+        setIsDeleting(true)
         try {
-            await deactivateQuestion(id)
-
-            setQuestions((current) =>
-                current.map((question) =>
-                    question.id === id
-                        ? {
-                              ...question,
-                              is_active: false,
-                          }
-                        : question
-                )
-            )
-
-            setSelected((current) =>
-                current.filter((item) => item !== id)
-            )
+            if (Array.isArray(deleteQuestionId)) {
+                await Promise.all(deleteQuestionId.map(id => deleteQuestion(id)))
+                setSelected([])
+            } else {
+                await deleteQuestion(deleteQuestionId)
+                setSelected((current) => current.filter((item) => item !== deleteQuestionId))
+            }
+            queryClient.invalidateQueries({ queryKey: ['questions'] })
+            setDeleteQuestionId(null)
         } catch (requestError) {
             console.error(requestError)
-
-            window.alert(
-                "Unable to deactivate the question."
-            )
+            window.alert("Unable to delete question(s).")
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -135,6 +130,13 @@ export default function QuestionBank() {
                             <button className="bg-white dark:bg-[#141518] text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-lg text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-[#1a1c22] transition-colors flex items-center gap-2 border border-slate-200 dark:border-slate-800 shadow-sm focus:ring-2 focus:ring-blue-500/50 focus:outline-none cursor-pointer">
                                 <svg className="w-[18px] h-[18px] text-slate-400 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                                 Import CSV
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsAiModalOpen(true)}
+                                className="bg-purple-600/10 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20 px-5 py-2.5 rounded-lg text-[13px] font-semibold hover:bg-purple-600/20 dark:hover:bg-purple-500/20 transition-colors flex items-center gap-2 shadow-sm focus:ring-2 focus:ring-purple-400 focus:outline-none cursor-pointer active:scale-[0.98]"
+                            >
+                                Create using AI
                             </button>
                             <button
                                 type="button"
@@ -257,9 +259,9 @@ export default function QuestionBank() {
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg> 
                                     Add to Quiz
                                 </button>
-                                <button onClick={() => selected.forEach(handleDeactivate)} className="hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg> 
-                                    Deactivate
+                                <button onClick={() => setDeleteQuestionId(selected)} className="hover:text-red-400 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> 
+                                    Delete
                                 </button>
                                 <div className="w-px h-4 bg-slate-700"></div>
                                 <button onClick={() => setSelected([])} className="hover:text-slate-300 transition-colors ml-1 cursor-pointer">
@@ -300,7 +302,7 @@ export default function QuestionBank() {
 
                         {/* Data Table */}
                         <div className="flex-1 overflow-x-auto relative min-h-[300px]">
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                                 <thead>
                                     <tr className="bg-[#f0f2f5] dark:bg-[#0e0f12] border-b border-slate-300 dark:border-slate-800">
                                         <th className="py-3.5 pl-5 w-12">
@@ -339,7 +341,7 @@ export default function QuestionBank() {
                                                 question={question}
                                                 selected={selected.includes(question.id)}
                                                 onSelect={handleSelect}
-                                                onDeactivate={handleDeactivate}
+                                                onDelete={setDeleteQuestionId}
                                             />
                                         ))
                                     )}
@@ -378,6 +380,21 @@ export default function QuestionBank() {
                     </div>
                 </div>
             </div>
+
+            <AiGeneratorModal
+                isOpen={isAiModalOpen}
+                onClose={() => setIsAiModalOpen(false)}
+                onGenerate={handleGenerateAi}
+            />
+
+            <ConfirmDeleteModal
+                isOpen={!!deleteQuestionId}
+                onClose={() => setDeleteQuestionId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Question?"
+                message="Are you sure you want to completely delete this question? This action cannot be undone."
+                isDeleting={isDeleting}
+            />
         </TeacherShell>
     )
 }

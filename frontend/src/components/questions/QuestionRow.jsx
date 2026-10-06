@@ -13,7 +13,7 @@ export default function QuestionRow({
     question,
     selected,
     onSelect,
-    onDeactivate,
+    onDelete,
 }) {
     const [menuOpen, setMenuOpen] = useState(false)
 
@@ -37,12 +37,12 @@ export default function QuestionRow({
                     />
                 </div>
             </td>
-            <td className="py-4 px-4 align-top">
+            <td className="py-4 px-4 align-top w-full max-w-0">
                 <div className="flex flex-col gap-1.5 dark:gap-1">
-                    <span className="font-title-lg text-[15px] dark:text-[14px] leading-tight dark:leading-snug text-slate-900 dark:text-white font-semibold truncate max-w-[500px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    <span className="font-title-lg text-[15px] dark:text-[14px] leading-tight dark:leading-snug text-slate-900 dark:text-white font-semibold truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {question.title || `Question #${question.id}`}
                     </span>
-                    <span className="font-body-sm text-[14px] dark:text-[13px] text-slate-500 dark:text-slate-400 truncate max-w-[500px]">
+                    <span className="font-body-sm text-[14px] dark:text-[13px] text-slate-500 dark:text-slate-400 truncate">
                         {question.text}
                     </span>
                 </div>
@@ -113,12 +113,12 @@ export default function QuestionRow({
                                     <button 
                                         onClick={() => {
                                             setMenuOpen(false);
-                                            onDeactivate(question.id);
+                                            onDelete(question.id);
                                         }}
                                         className="px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 text-left w-full flex items-center gap-2 transition-colors cursor-pointer"
                                     >
-                                        <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                                        Deactivate
+                                        <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        Delete
                                     </button>
                                 </>
                             )}

@@ -85,6 +85,56 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
         return queryset.order_by("-updated_at", "-id")
 
+    @action(detail=False, methods=["post"])
+    def generate_ai(self, request):
+        from .ai import generate_questions
+
+        prompt_instructions = request.data.get("prompt_instructions", "")
+        count = request.data.get("count", 3)
+        question_type = request.data.get("question_type", "MCQ")
+        difficulty = request.data.get("difficulty", "MEDIUM")
+        topic = request.data.get("topic", "General Knowledge")
+        option_variance = request.data.get("option_variance", "Different")
+
+        try:
+            count = min(int(count), 10)
+            
+            ai_data = generate_questions(
+                prompt_instructions=prompt_instructions,
+                count=count,
+                question_type=question_type,
+                difficulty=difficulty,
+                topic=topic,
+                option_variance=option_variance,
+            )
+
+            created_questions = []
+            
+            with transaction.atomic():
+                for q_data in ai_data.get("questions", []):
+                    # Ensure no nulls are passed to DRF which expects strings/lists
+                    if q_data.get("starter_code") is None:
+                        q_data["starter_code"] = ""
+                    if q_data.get("options") is None:
+                        q_data["options"] = []
+                    if q_data.get("test_cases") is None:
+                        q_data["test_cases"] = []
+
+                    serializer = self.get_serializer(data=q_data)
+                    serializer.is_valid(raise_exception=True)
+                    question = serializer.save(teacher=request.user)
+                    self._create_version(question)
+                    created_questions.append(serializer.data)
+
+            return Response(created_questions, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     def perform_create(self, serializer):
         with transaction.atomic():
             question = serializer.save(
@@ -164,35 +214,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         """
-        Soft delete.
-
-        Questions are deactivated instead of physically deleted because
-        they may already be referenced by historical exams.
+        Hard delete.
+        Deletes the question and its associated options and test cases.
         """
         instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-        if not instance.is_active:
-            return Response(
-                {
-                    "detail": "Question is already inactive."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
-        instance.is_active = False
-        instance.save(
-            update_fields=[
-                "is_active",
-                "updated_at",
-            ]
-        )
-
-        return Response(
-            {
-                "detail": "Question deactivated successfully."
-            },
-            status=status.HTTP_200_OK,
-        )
 
     @staticmethod
     def _build_snapshot(question):
