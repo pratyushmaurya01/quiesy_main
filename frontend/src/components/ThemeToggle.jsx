@@ -1,43 +1,101 @@
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false)
+    const [isDark, setIsDark] = useState(false)
 
-  // When the component loads, check what theme the HTML currently has
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"))
-  }, [])
+    useEffect(() => {
+        setIsDark(
+            document.documentElement.classList.contains("dark")
+        )
+    }, [])
 
-  const toggleTheme = () => {
-    if (isDark) {
-      document.documentElement.classList.remove("dark")
-      localStorage.setItem("theme", "light")
-      setIsDark(false)
-    } else {
-      document.documentElement.classList.add("dark")
-      localStorage.setItem("theme", "dark")
-      setIsDark(true)
+    const toggleTheme = () => {
+        const nextIsDark = !isDark
+
+        document.documentElement.classList.toggle(
+            "dark",
+            nextIsDark
+        )
+
+        localStorage.setItem(
+            "theme",
+            nextIsDark ? "dark" : "light"
+        )
+
+        setIsDark(nextIsDark)
     }
-  }
 
-  return (
-    <button
-      onClick={toggleTheme}
-      className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-      aria-label="Toggle Dark Mode"
-      title="Switch Theme"
-    >
-      {isDark ? (
-        // Sun Icon (Currently Dark, click for Light)
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ) : (
-        // Moon Icon (Currently Light, click for Dark)
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-        </svg>
-      )}
-    </button>
-  )
+    return (
+        <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={
+                isDark
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+            }
+            title={
+                isDark
+                    ? "Switch to light mode"
+                    : "Switch to dark mode"
+            }
+            className="
+                flex h-9 w-9 items-center justify-center
+                rounded-lg
+                border border-slate-200
+                bg-white
+                text-slate-600
+                transition-all duration-200
+                hover:-translate-y-0.5
+                hover:bg-slate-50
+                hover:text-slate-900
+                focus:outline-none
+                focus:ring-2 focus:ring-blue-500/30
+                dark:border-slate-800
+                dark:bg-slate-900
+                dark:text-slate-300
+                dark:hover:bg-slate-800
+                dark:hover:text-white
+            "
+        >
+            {isDark ? (
+                <svg
+                    className="h-[18px] w-[18px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                >
+                    <circle cx="12" cy="12" r="4" />
+                    <path
+                        strokeLinecap="round"
+                        d="
+                            M12 2v2
+                            M12 20v2
+                            M4.93 4.93l1.41 1.41
+                            M17.66 17.66l1.41 1.41
+                            M2 12h2
+                            M20 12h2
+                            M4.93 19.07l1.41-1.41
+                            M17.66 6.34l1.41-1.41
+                        "
+                    />
+                </svg>
+            ) : (
+                <svg
+                    className="h-[18px] w-[18px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"
+                    />
+                </svg>
+            )}
+        </button>
+    )
 }

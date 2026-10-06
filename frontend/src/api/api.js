@@ -1,72 +1,135 @@
 import axios from "axios"
 
 const API = axios.create({
-  // baseURL: "https://quiesy-8igi.onrender.com/api/"
-  baseURL: "http://127.0.0.1:8000/api/"
-
+    baseURL: "http://127.0.0.1:8000/api/v1/",
 })
 
+API.interceptors.request.use((config) => {
+    const token = localStorage.getItem("access")
+
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+    }
+
+    return config
+})
+
+API.interceptors.response.use(
+    (response) => response,
+
+    async (error) => {
+        const originalRequest = error.config
+        const status = error.response?.status
+        const url = originalRequest?.url || ""
+
+        const isLoginRequest = url.includes("auth/login/")
+        const isRefreshRequest = url.includes("auth/token/refresh/")
+
+        if (
+            status === 401 &&
+            !isLoginRequest &&
+            !isRefreshRequest &&
+            !originalRequest._retry
+        ) {
+            originalRequest._retry = true
+
+            try {
+                const refresh = localStorage.getItem("refresh")
+
+                if (!refresh) {
+                    throw new Error("No refresh token")
+                }
+
+                const response = await axios.post(
+                    "http://127.0.0.1:8000/api/v1/auth/token/refresh/",
+                    {
+                        refresh,
+                    }
+                )
+
+                const newAccess = response.data.access
+                const newRefresh = response.data.refresh
+
+                localStorage.setItem("access", newAccess)
+
+                if (newRefresh) {
+                    localStorage.setItem("refresh", newRefresh)
+                }
+
+                originalRequest.headers.Authorization = `Bearer ${newAccess}`
+
+                return API(originalRequest)
+
+            } catch (refreshError) {
+                localStorage.removeItem("access")
+                localStorage.removeItem("refresh")
+
+                window.location.href = "/login"
+
+                return Promise.reject(refreshError)
+            }
+        }
+
+        return Promise.reject(error)
+    }
+)
+
+export const registerUser = (data) => {
+    return API.post("auth/register/", data)
+}
+
+export const loginUser = (data) => {
+    return API.post("auth/login/", data)
+}
+
+export const verifyEmail = (data) => {
+    return API.post("auth/verify-email/", data)
+}
+
+export const resendOTP = (data) => {
+    return API.post("auth/resend-otp/", data)
+}
+
+export const forgotPassword = (data) => {
+    return API.post("auth/forgot-password/", data)
+}
+
+export const resetPassword = (data) => {
+    return API.post("auth/reset-password/", data)
+}
+
+export const getCurrentUser = () => {
+    return API.get("auth/me/")
+}
+
+export const refreshAccessToken = (refresh) => {
+    return axios.post(
+        "http://127.0.0.1:8000/api/v1/auth/token/refresh/",
+        { refresh }
+    )
+}
+
+export const logoutUser = (refresh) => {
+    return API.post(
+        "auth/logout/",
+        { refresh }
+    )
+}
+
 export const createQuiz = (data, token) => {
-  return API.post("create-quiz/", data, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+    return API.post("../create-quiz/", data, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    })
 }
 
 export const getTeacherQuizzes = (token) => {
-  return API.get("teacher-quizzes/", {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+    return API.get("../teacher-quizzes/", {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    })
 }
-
-// 🔥 FIX: REQUEST INTERCEPTOR
-API.interceptors.request.use((config) => {
-  // Login aur Register request mein kabhi token mat bhejo
-  if (!config.url.includes("login") && !config.url.includes("register")) {
-    const token = localStorage.getItem("access")
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-  }
-  return config
-})
-
-// 🔥 FIX: RESPONSE INTERCEPTOR
-API.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    // Agar login request khud 401 de rahi hai, toh usko refresh mat karo
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes("login")) {
-      originalRequest._retry = true
-
-      try {
-        const refresh = localStorage.getItem("refresh")
-        
-        // Agar refresh token hi nahi hai, toh refresh fail kar do
-        if (!refresh) throw new Error("No refresh token")
-
-        const res = await axios.post(
-          "http://127.0.0.1:8000/api/token/refresh/",
-          { refresh }
-        )
-
-        const newAccess = res.data.access
-        localStorage.setItem("access", newAccess)
-        originalRequest.headers.Authorization = `Bearer ${newAccess}`
-        return API(originalRequest)
-
-      } catch (err) {
-        console.log("Refresh token expired, login again")
-        localStorage.removeItem("access")
-        localStorage.removeItem("refresh")
-        window.location.href = "/login" // User ko wapas login par bhejo
-        return Promise.reject(err)
-      }
-    }
-
-    return Promise.reject(error)
-  }
-)
 
 export default API
