@@ -19,7 +19,6 @@ COPY . .
 # Collect static files for production (admin CSS etc)
 RUN python manage.py collectstatic --noinput
 
-# 6. Django server ko Gunicorn ke sath start karo (Production ke liye zaroori hai)
-# NOTE: Agar aapke project folder ka naam 'backend' nahi hai (jisme settings.py hoti hai), 
-# toh yahan 'backend' ki jagah wo naam likh dena.
-CMD sh -c "python manage.py migrate && gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --access-logfile -"
+# 6. Django server ko Gunicorn ke sath start karo
+# NOTE: Free tier (512MB RAM) ke liye --workers 1 --threads 4 use karna best hai taaki OOM error na aaye
+CMD sh -c "python manage.py migrate && gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --access-logfile -"
