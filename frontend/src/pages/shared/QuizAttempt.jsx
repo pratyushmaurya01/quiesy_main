@@ -319,7 +319,8 @@ export default function QuizAttempt() {
       if (isIntentionalCloseRef.current) return
 
       const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-      const wsHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "127.0.0.1:8000" : window.location.host
+      const backendUrl = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
+      const wsHost = new URL(backendUrl).host
       const wsUrl = `${wsProtocol}//${wsHost}/ws/quiz-proctor/${effectiveQuizId}/`
 
       console.log(`[QuizAttempt WS] Connecting to ${wsUrl} for attempt ${currentAttemptId}...`)

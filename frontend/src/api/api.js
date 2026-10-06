@@ -1,7 +1,9 @@
 import axios from "axios"
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1/"
+
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000/api/v1/",
+    baseURL: API_BASE_URL,
 })
 
 API.interceptors.request.use((config) => {
@@ -41,7 +43,7 @@ API.interceptors.response.use(
                 }
 
                 const response = await axios.post(
-                    "http://127.0.0.1:8000/api/v1/auth/token/refresh/",
+                    `${API_BASE_URL}auth/token/refresh/`,
                     {
                         refresh,
                     }
@@ -104,7 +106,7 @@ export const getCurrentUser = () => {
 
 export const refreshAccessToken = (refresh) => {
     return axios.post(
-        "http://127.0.0.1:8000/api/v1/auth/token/refresh/",
+        `${API_BASE_URL}auth/token/refresh/`,
         { refresh }
     )
 }
