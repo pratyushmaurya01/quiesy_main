@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 5. Aapka baaki saara code copy karo
 COPY . .
 
+# Collect static files for production (admin CSS etc)
+RUN python manage.py collectstatic --noinput
+
 # 6. Django server ko Gunicorn ke sath start karo (Production ke liye zaroori hai)
 # NOTE: Agar aapke project folder ka naam 'backend' nahi hai (jisme settings.py hoti hai), 
 # toh yahan 'backend' ki jagah wo naam likh dena.
